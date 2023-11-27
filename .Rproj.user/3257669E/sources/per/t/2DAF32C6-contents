@@ -1,0 +1,672 @@
+---
+title: "#30DayMapChallenge 2023"
+author: "Jasmine Siyu Wu"
+date: "10/18/2023"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+    code_folding: hide
+  ioslides_presentation:
+    self-included: yes
+  pdf_document:
+    toc: yes
+---
+
+
+You will be participating in the 30-day mapping challenge! For this class, you will
+be required to submit a map for at least 10 of the days above. Your map should be 
+posted to your GitHub Repo on the corresponding day and if you have an account, 
+post on social media with the hashtag #30DayMapChallenge and tag the MUSA program also of course!
+
+
+If you just post 10 maps on the last day, I won't be happy. Feel free to plan ahead. 
+The map doesn't have to be perfect but try to use our data visualization design 
+principles. You can use any mapping package. 
+
+
+Please organize your repo so that it also includes a Folder for the outputs and 
+save each map as a file (png or jpeg). Document your R markdown. Make that pretty - also.
+
+**1. Points**
+
+**2. Lines**
+
+**3. Polygons**
+
+**6. Asia**
+
+**9. Hexagons**
+
+**10. North America**
+
+**17. Flow**
+
+**24. Black & white**
+
+**26. Minimal**
+
+**27. Dot**
+
+**29. Population**
+
+
+
+4. A bad map
+5. Analog Map
+7. Navigation
+8. Africa
+11. Retro
+12. South America
+14. Europe
+16. Oceania
+18. Atomosphere
+19. 5 minute map
+20. Ourdoors
+21. Raster
+22. North is not always up
+23. 3D
+25. Antarctica
+28. Is this a chart or a map?
+30. "My favoyrite ..."
+
+
+
+```{r libraries, include=TRUE, cache = FALSE, message = FALSE, warning = FALSE, results=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+
+#Loading Libraries
+library(tidyverse)
+library(knitr)
+library(ggplot2)
+library(grid)
+library(gridExtra)
+library(kableExtra)
+library(dplyr)
+library(ggtext)
+library(grid)
+library(gridExtra)
+library(gridtext)
+library(giscoR)
+library(sf)
+library(tidycensus)
+library(scales)
+
+options(scipen=1)  #999
+
+```
+
+
+```{r set up theme, include=TRUE, cache = FALSE, message = FALSE, results=FALSE}
+
+# map_theme <- function () {
+#       font <- "serif" 
+#       theme_minimal() %+replace% # replace elements we want to see
+#       
+#       theme(
+#         ## Grid elements
+#         panel.grid.major= element_line(colour="#dddddd",size=.1), #element_blank(), #
+#         panel.grid.minor = element_blank(),
+#         #axis.line = element_line(colour="#D0D0D0",size=.2),
+#         #axis.ticks = element_blank(),
+# 
+#         ## Text elements
+#         plot.title = element_text(
+#           family = font,
+#           size = 13,
+#           lineheight = 0.75,
+#           color = "#222222",
+#           face = 'bold',
+#           hjust = 0.65,
+#           vjust = 0,
+#           margin = margin(l=10, t=10, b=20, unit="pt")),
+#         
+#         #panel.background = element_rect(fill = "#eeeeee"),
+#         plot.background = element_blank(),
+#         
+#         plot.subtitle = element_text(
+#           family = font,
+#           size = 12,
+#           color = "#222222"),
+#         
+#         plot.caption = element_text(
+#           family = font,
+#           size = 9,
+#           hjust = 1,
+#           vjust = -1,
+#           margin = margin(6, 0, 6, 0, "pt")),
+#         
+#         axis.text = element_text(
+#           family=font,
+#           size = 10),
+# 
+#         
+#         axis.title.y = element_text(
+#           family = font,
+#           color = "#222222",
+#           face = 'bold',
+#           size = 12,
+#           hjust = 1, 
+#           #vjust = 1,
+#           margin = margin(0, 6, 0, 6, "pt")),
+#         
+#         axis.title.x = element_text(
+#           family = font,
+#           color = "#222222",
+#           face = 'bold',
+#           size = 12,
+#           #hjust = 0, 
+#           margin = margin(6, 0, 6, 0, "pt")),
+#         
+#         plot.margin = margin(.25,.25,.25,.25,"cm")
+#         )
+#       # legend often requires manual tweaking based on plot content so don't define it here
+# }
+
+
+
+map_theme <- function(base_size = 12) {
+  theme(plot.title =element_text(size=12),
+                  plot.subtitle = element_text(size=8),
+                  plot.caption = element_text(size = 6),
+                  plot.background = element_rect(fill = "#222222"),
+                  #plot.background = element_blank(),
+                  axis.line=element_blank(),
+                  axis.text.x=element_blank(),
+                  axis.text.y=element_blank(),
+                  axis.ticks=element_blank(),
+                  axis.title.x=element_blank(),
+                  axis.title.y=element_blank(),
+                  panel.background = element_rect(fill = "#222222"),
+                  #panel.background = element_blank(),
+                  panel.border=element_blank(),
+                  panel.grid.major=element_line(colour = 'transparent'),
+                  panel.grid.minor=element_blank(),
+                  legend.direction = "vertical", 
+                  legend.position = "right",
+                  legend.background = element_rect(fill = "#222222"),
+                  plot.margin = margin(1, 1, 1, 1, 'cm'),
+                  legend.key.height = unit(1, "cm"), legend.key.width = unit(0.2, "cm")
+  )}
+```
+
+
+Data source: [All the Airports Across The World Dataset](https://www.kaggle.com/datasets/timmofeyy/all-the-airport-across-the-world-dataset?select=airports_data.csv)
+
+1. **IATA** stands for the International Air Transport Association. It is a global trade association representing airlines and the air transport industry. IATA's main objective is to promote safe, reliable, and efficient air transportation. It establishes industry standards, provides training and support services, and advocates for the interests of its member airlines. IATA also develops and maintains industry codes, such as airline and airport codes, to ensure uniformity and efficiency in air travel operations worldwide.
+
+2. **ICAO** stands for the International Civil Aviation Organization. It is a specialized agency of the United Nations responsible for setting international standards and regulations in the field of civil aviation. ICAO's primary goal is to promote the safe, secure, and orderly development of international civil aviation. It establishes standards and procedures for aviation safety, security, efficiency, and environmental protection. ICAO also facilitates cooperation among member states and provides technical assistance and training to help improve aviation capabilities worldwide. Additionally, it serves as a forum for member states to address common aviation issues and work towards harmonization of regulations and practices.
+
+3. **Altitude** refers to the vertical distance above a reference point or a specific surface, such as sea level. It is commonly used in aviation and geography to indicate the height or elevation of an object or location above the Earth's surface. Altitude is measured in units such as feet or meters. In aviation, altitude plays a crucial role in determining the aircraft's position in relation to the ground or other aircraft, as well as in planning flight routes and complying with airspace regulations. In geography, altitude is used to describe the height of mountains, hills, or other landforms, and it affects factors like climate, vegetation, and atmospheric conditions.
+
+
+```{r read data }
+
+airports <- read.csv("Data/archive/airports_data.csv") %>% 
+              st_as_sf(., coords=c("lon", "lat"), crs=4326)
+airports <- airports %>% 
+  mutate(long = st_coordinates(airports)[, 1],
+         lat = st_coordinates(airports)[, 2])
+airports_metro <- read.csv("Data/archive/metro_in_airports_iata_codes.csv")
+
+airlines_meal <- read.csv("Data/archive/airlines_meal_codes.csv")
+entertainment_iata <- read.csv("Data/archive/entertainment_iata_codes.csv")
+aircrafts_iata <- read.csv("Data/archive/aircrafts_iata_codes.csv")
+airlines_country <- read.csv("Data/archive/airlines_and_countries_they_operate_in.csv")
+
+airports_global_entry <- read.csv("Data/airports_global_entry.csv")
+usa_top_intl_airports <- read.csv("Data/usa_top_itl_airports.csv") %>% 
+                            merge( airports, .,
+                                  by.y="iata.code", by.x="iata", all.y=TRUE) %>%
+                          mutate(intl_flights = as.numeric(intl_flights))
+
+
+# read world geographies
+countries <-  gisco_get_countries(resolution = "03", 
+                                  epsg = "4326")  
+
+
+us <- get_decennial(geography = "state", 
+                    year = 2010,
+                    variables = "P001001",
+                    geometry = TRUE)
+
+us <- st_transform(us, crs = 'EPSG:5070')
+cont_us <- us%>% filter(NAME != 'Alaska' & NAME != 'Hawaii')
+
+```
+
+
+## Day 1: Points map - [Top USA international airports]
+
+[USA top international airports Dec 2022](https://simpleflying.com/usa-top-international-airports-december-2022/#:~:text=Of%20major%20airports%2C%20Miami%20leapfrogs,7.4%25)%2C%20and%20many%20more)
+
+```{r point map, fig.height=6, fig.width=9}
+plot_data <- usa_top_intl_airports %>% 
+  st_transform(., crs='EPSG:5070')
+plot_data <- plot_data %>%  
+  mutate(long_new = st_coordinates(plot_data)[, 1],
+         lat_new = st_coordinates(plot_data)[, 2])
+
+
+ggplot() +
+  geom_sf(data = cont_us,
+          fill = "#ffffff", color="#333333", linewidth = 0.1) +
+  geom_sf(data = plot_data, 
+          aes(size=intl_flights), alpha=0.7,
+          col = "#EC7E00") +
+  scale_size(breaks = waiver(), range=c(2, 7),
+             name="Total international flights", 
+             guide=guide_legend(direction="horizontal")) +
+  geom_richtext(aes(x = plot_data[plot_data$iata=="JFK",]$long_new,
+                    y = plot_data[plot_data$iata=="JFK",]$lat_new,
+                label = "JFK (38% int. flights)"),
+                size = 3.5, position = "identity", fontface="bold",                
+                fill = NA, label.color = NA, color="#EC7E00",
+                hjust=-0.1, vjust=0.1) +
+  geom_richtext(aes(x = plot_data[plot_data$iata=="EWR",]$long_new,
+                    y = plot_data[plot_data$iata=="EWR",]$lat_new,
+                label = "EWR (24% int. flights)"),
+                size = 3.5, position = "identity", fontface="bold",                
+                fill = NA, label.color = NA, color="#EC7E00",
+                hjust=-0.1, vjust=0.7) +
+  geom_richtext(aes(x = plot_data[plot_data$iata=="SFO",]$long_new,
+                    y = plot_data[plot_data$iata=="SFO",]$lat_new,
+                label = "SFO (19% int. flights)"),
+                size = 3.5, position = "identity", fontface="bold",                
+                fill = NA, label.color = NA, color="#EC7E00",
+                hjust=0, vjust=0.2) +
+  geom_richtext(aes(x = plot_data[plot_data$iata=="LAX",]$long_new,
+                    y = plot_data[plot_data$iata=="LAX",]$lat_new,
+                label = "LAX (21% int. flights)"),
+                size = 3.5, position = "identity", fontface="bold",                
+                fill = NA, label.color = NA, color="#EC7E00",
+                hjust=-0.05, vjust=0.3) +
+  geom_richtext(aes(x = plot_data[plot_data$iata=="MIA",]$long_new,
+                    y = plot_data[plot_data$iata=="MIA",]$lat_new,
+                label = "MIA (43% int. flights)"),
+                size = 3.5, position = "identity", fontface="bold",                
+                fill = NA, label.color = NA, color="#EC7E00",
+               hjust=-0.1, vjust=1.1) +
+  geom_richtext(aes(x = plot_data[plot_data$iata=="FLL",]$long_new,
+                    y = plot_data[plot_data$iata=="FLL",]$lat_new,
+                label = "FLL (25% int. flights)"),
+                size = 3.5, position = "identity", fontface="bold",                
+                fill = NA, label.color = NA, color="#EC7E00",
+                hjust=-0.1, vjust=0.4) +
+  geom_richtext(aes(x = plot_data[plot_data$iata=="IAH",]$long_new,
+                    y = plot_data[plot_data$iata=="IAH",]$lat_new,
+                label = "IAH (21% int. flights)"),
+                size = 3.5, position = "identity", fontface="bold",                
+                fill = NA, label.color = NA, color="#EC7E00",
+                hjust=-0.05, vjust=1.2) +
+  geom_richtext(aes(x = plot_data[plot_data$iata=="DFW",]$long_new,
+                    y = plot_data[plot_data$iata=="DFW",]$lat_new,
+                label = "DFW (12% int. flights)"),
+                size = 3.5, position = "identity", fontface="bold",                
+                fill = NA, label.color = NA, color="#EC7E00",
+                hjust=-0.05, vjust=0.4) +
+  geom_richtext(aes(x = plot_data[plot_data$iata=="ATL",]$long_new,
+                    y = plot_data[plot_data$iata=="ATL",]$lat_new,
+                label = "ATL (9% int. flights)"),
+                size = 3.5, position = "identity", fontface="bold",                
+                fill = NA, label.color = NA, color="#EC7E00",
+                hjust=-0.05, vjust=0.4) +
+  geom_richtext(aes(x = plot_data[plot_data$iata=="ORD",]$long_new,
+                    y = plot_data[plot_data$iata=="ORD",]$lat_new,
+                label = "ORD (11% int. flights)"),
+                size = 3.5, position = "identity", fontface="bold",                
+                fill = NA, label.color = NA, color="#EC7E00",
+                hjust=0.15, vjust=1) +
+  # geom_richtext(aes(x = usa_top_intl_airports[usa_top_intl_airports$iata=="MIA",]$long, 
+  #                    y = usa_top_intl_airports[usa_top_intl_airports$iata=="MIA",]$lat,
+  #                    label = "Miami International Airport \nInternaional flights: 43.10%"), size = 3,
+  #                    fill = NA, label.color = NA, color="#FB8500") +
+  labs(title = "<span style='color:#ffffff'>Top 10</span> <span style='color:#EC7E00'>international airports</span> <span style='color:#ffffff'>are responsible for 62% of the U.S. international operations</span>", 
+       subtitle = "Dec. 2022",
+       caption = "Data source: Cirium | Jasmine Siyu Wu\nNote: Data were retrieved from Simple Flying") +
+  map_theme()+
+  theme(plot.title = element_markdown(size = 13, face = "bold"),
+        plot.subtitle = element_text(size=10, color = "#ffffff"),
+        plot.caption = element_text(size = 6, color = "#ffffff"),
+        legend.title = element_text(size = 9, color = "#ffffff"),
+        legend.text = element_text(size = 8, color = "#ffffff"),
+        legend.position = c(0.3, 0.05),
+        legend.key = element_rect(fill = "transparent") )
+
+# New York JFL #1 of total international flights and #3 of proportion of international flights
+# Miami #2 of total flights and #2 of proportion of international flights
+# Los Angeles #3 of total international flights and #10 of proportion of international flights
+
+ggsave("day1.jpeg", device = "jpeg", width = 9, height=6,
+       path = "Output")
+
+```
+
+## Day 2: Lines map [Driving distance to major UK airports]
+
+calculate hexagon centroids' distance to nearest global entry airports in the U.S.
+
+
+
+## Day 3: Polygons map
+
+```{r polygon map, fig.height=6, fig.width=10}
+
+#airlines_country %>% filter(IATACode %in% c("AA", "UA", "DL", "AS"))
+
+AA_countries <- airlines_country[airlines_country$IATACode == "AA", ]$Countries
+AA_countries <- gsub('[^[:alnum:] ]', '', AA_countries)
+AA_countries <- as.list(strsplit(AA_countries, " "))[[1]]
+
+
+UA_countries <- airlines_country[airlines_country$IATACode == "UA", ]$Countries
+UA_countries <- gsub('[^[:alnum:] ]', '', UA_countries)
+UA_countries <- as.list(strsplit(UA_countries, " "))[[1]]
+
+DL_countries <- airlines_country[airlines_country$IATACode == "DL", ]$Countries
+DL_countries <- gsub('[^[:alnum:] ]', '', DL_countries)
+DL_countries <- as.list(strsplit(DL_countries, " "))[[1]]
+
+AS_countries <- airlines_country[airlines_country$IATACode == "AS", ]$Countries
+AS_countries <- gsub('[^[:alnum:] ]', '', AS_countries)
+AS_countries <- as.list(strsplit(AS_countries, " "))[[1]]
+
+countries <- countries %>% 
+  mutate(AA = if_else(CNTR_ID %in% AA_countries, 1, 0),
+         UA = if_else(CNTR_ID %in% UA_countries, 1, 0),
+         DL = if_else(CNTR_ID %in% DL_countries, 1, 0),
+         AS = if_else(CNTR_ID %in% AS_countries, 1, 0))
+
+# sum(countries$AA)
+# sum(countries$AS)
+# sum(countries$DL)
+# sum(countries$UA)
+
+
+# # countries that all three airlines can get you to from the U.S.    45
+# countries_centroids %>% subset(AA == 1 & UA == 1 & DL == 1)
+# # countries that only UA can get you to from the U.S.   11
+# countries_centroids %>% subset(AA == 0 & UA == 1 & DL == 0)
+# # countries that only AA can get you to from the U.S.   9
+# countries_centroids %>% subset(AA == 1 & UA == 0 & DL == 0)
+# # countries that only DL can get you to from the U.S.   3
+# countries_centroids %>% subset(AA == 0 & UA == 0 & DL == 1)
+# # countries that only UA and AA can get you to from the U.S.    4
+# countries_centroids %>% subset(AA == 1 & UA == 1 & DL == 0)
+# # countries that only UA and DL can get you to from the U.S.    7
+# countries_centroids %>% subset(AA == 0 & UA == 1 & DL == 1)
+
+
+# the countries that only AA or UA or Delta can get you to
+plot_data <- countries %>% merge(., countries %>% st_transform(st_crs(airports)) %>%
+                                   mutate(centroids = st_centroid(st_geometry(.))) %>%
+                                   mutate(lon = unlist(map(.$centroids,1)),
+                                         lat = unlist(map(.$centroids,2))) %>%
+                                   select(CNTR_ID, lat, lon) %>%
+                                   st_drop_geometry(),
+                                 by.x="CNTR_ID", by.y="CNTR_ID") %>%
+  mutate(only_serv = case_when(AA==1 & UA==0 & DL==0 ~ "AA only",
+                               AA==0 & UA==1 & DL==0 ~ "UA only",
+                               AA==0 & UA==0 & DL==1 ~ "DL only",
+                               AA==1 & UA==1 & DL==1 ~ "All fly",
+                               AA==1 & UA==1 & DL==0 ~ "AA or UA",
+                               AA==0 & UA==1 & DL==1 ~ "UA or DL"),
+         only_serv = if_else(is.na(only_serv), "None flies", only_serv)) %>% 
+  filter(only_serv != "None flies") %>%
+  st_transform(st_crs(airports))
+
+
+
+ggplot()+
+  geom_sf(data = countries %>% st_transform(st_crs(airports)), 
+          fill = "#444444", color="#222222", linewidth=0.2) +
+  geom_sf(data=plot_data, 
+          aes(fill = only_serv), color="#222222", linewidth=0.2)+
+  scale_fill_manual(values = c("#b21f36", "#ef6d76", "#dddddd", "#50a7df", "#2d5daa", "#073aa1"), 
+                    name = "") +
+  # geom_text(data=plot_data %>% filter(only_serv %in% c("AA only", "UA only", "DL only")), 
+  #           aes(x=lon, y=lat, label = NAME_ENGL), 
+  #           position="identity", vjust=0.2, hjust=-0.2,
+  #           check_overlap = TRUE,
+  #           size = 3, color="#FFFFFF") +
+  #scale_alpha_continuous(range = c(0.03, 0.3))+
+  labs(title = " From US, you can fly with one of AA, UA & Delta traveling to these countries", 
+       caption = "Data source: EFIMPOLIANSKII @Kaggle | Jasmine Siyu Wu"
+       ) +
+  map_theme() +
+  theme(plot.title = element_text(size = 15, face = "bold", color = "#ffffff"),
+        plot.subtitle = element_text(size=15),
+        plot.caption = element_text(size = 6, color = "#ffffff"),
+        legend.title = element_text(size = 9, color = "#ffffff"),
+        legend.text = element_text(size = 8, color = "#ffffff"),
+        legend.position = c(0.05, 0.4))
+
+ggsave("day3.jpeg", device = "jpeg", width = 10, height=6,
+       path = "Output")
+
+```
+
+
+## Day 6: Asia [Busiest airports in Asia: weekly August flights]
+[Busiest airports in Asia](https://simpleflying.com/asia-busiest-airports-august-2023/)
+
+
+## Day 9: Hexagons map [Driving time to the nearest major UK airports]
+
+use the calculated hexagon centroids' distance to nearest global entry airports in the U.S. and plot smooth surface
+
+
+## Day 10: North America map
+
+
+
+
+## Day 17: Flow map [Destinations of American, Delta, Southwest, United, and Alaska airlines]
+
+use `airlines_country` data
+
+```{r flow map, fig.height=6, fig.width=10}
+
+
+countries_centroids <- countries %>% 
+  mutate(centroids = st_centroid(st_geometry(.)))
+
+countries_centroids <- countries_centroids %>%
+  mutate(lon = unlist(map(countries_centroids$centroids,1)),
+         lat = unlist(map(countries_centroids$centroids,2))) %>%
+  st_drop_geometry()
+
+plot_data <- 
+  countries_centroids %>% subset(AA == 1) %>% 
+        select(CNTR_ID, CNTR_NAME, lat, lon) %>%
+        rename("dest_ID" = CNTR_ID,
+               "dest_name" = CNTR_NAME) %>%
+        mutate(airline = "AA") %>% 
+  rbind(., 
+        countries_centroids %>% subset(AS == 1) %>% 
+        select(CNTR_ID, CNTR_NAME, lat, lon) %>%
+        rename("dest_ID" = CNTR_ID,
+               "dest_name" = CNTR_NAME) %>%
+        mutate(airline = "AS")) %>%
+  rbind(.,
+        countries_centroids %>% subset(UA == 1) %>% 
+        select(CNTR_ID, CNTR_NAME, lat, lon) %>%
+        rename("dest_ID" = CNTR_ID,
+               "dest_name" = CNTR_NAME) %>%
+        mutate(airline = "UA")) %>%
+  rbind(.,
+        countries_centroids %>% subset(DL == 1) %>% 
+        select(CNTR_ID, CNTR_NAME, lat, lon) %>%
+        rename("dest_ID" = CNTR_ID,
+               "dest_name" = CNTR_NAME) %>%
+        mutate(airline = "DL")) %>%
+  mutate(origin_ID = "US",
+         origin_name = "United States",
+         dest_lat = lat, dest_lon = lon,
+         origin_lat = countries_centroids[countries_centroids$CNTR_ID == "US", ]$lat,
+         origin_lon = countries_centroids[countries_centroids$CNTR_ID == "US", ]$lon)
+
+plot_data <- plot_data %>% 
+  mutate(color = case_when(airline == "DL" ~ "#b21f36",
+                           airline == "AA" ~ "#4c9ed6",
+                           airline == "AS" ~ "#17385f",
+                           airline == "UA" ~ "#2d5daa"))
+
+
+ggplot()+
+  geom_sf(data = countries, fill = "#aaaaaa", color="#222222", linewidth=0.2) +
+  geom_segment(data=plot_data, 
+               aes(x=origin_lon, y=origin_lat, 
+                   xend=dest_lon, yend=dest_lat,
+                   color = color), linewidth=0.8)+
+  scale_color_identity() +
+  facet_wrap(~airline) +
+  #scale_alpha_continuous(range = c(0.03, 0.3))+
+  map_theme() +
+  scale_x_continuous("", breaks=NULL) +
+  scale_y_continuous("", breaks=NULL)
+
+
+
+
+```
+
+
+
+
+## Day 24: Black & white map 
+
+Pittsburgh stree network map
+
+
+
+## Day 26: Minimal map [The World's Lowest International Airport] 
+
+The facility sits below sea level.
+https://simpleflying.com/atyrau-lowest-international-airport-guide/
+
+Pittsburgh bridges by age
+
+
+## Day 27: Dot map -[All world airports, colored by altitude]
+
+
+```{r dot map, fig.height=6, fig.width=10}
+
+# lowest: Brawley Municipal Airport in U.S.  -128
+# 2nd lowest: Thermal Jacqueline Cochran Regional Airport in U.S.   -128
+# 3rd lowest: Atyrau Airport, Kazakhstan, -72
+# 4th lowest: Imperial County Airport, United States, -62
+# 5th lowest: Noshahr Airport, Iran, -61
+
+# Highest: Daocheng Yading Airport, China, 14418
+# 2nd highest: Qamdo Bamda Airport, China, 14219
+# 3rd highest: Kangding Airport, China, 13916
+# 4th highest: Garze Gesar Airport, China, 13346
+# 5th highest: La Paz El Alto International Airport, Bolivia, 13325
+# summary(airports$alt)
+
+
+cols5 <- c("#322BB1", "#FDF0E2", "#FAD1A2","#EAB67A", "#FA9522", "#EC7E00")
+
+#<span style='color:#322BB1;'>  </span>
+#<br> **8.** Lelystad Airport (LEY), Netherlands, -13
+text_grob <- grobTree(richtext_grob("**Altitude name, country, altitude**<br>
+                     **1.** Brawley Municipal Airport, U.S., -128ft<br>
+                     **2.** Thermal Jacqueline Cochran Regional Airport, U.S., -114ft<br>
+                     **3.** Atyrau Airport, Kazakhstan, -72ft<br>
+                     **4.** Imperial County Airport, U.S., -62ft<br>
+                     **5.** Noshahr Airport, Iran, -61ft<br>
+                     **6.** Lankaran International Airport, Azerbaijan, -50ft<br>
+                     **7.** Gorgan Airport, Iran, -24ft",
+                      x=0,  y=.15, hjust=0, 
+                      gp=gpar(col = "#ffffff", fontsize=8),
+                      #box_gp = gpar(col = "white", fill = "white"),
+                      padding = margin(.2,0,0,0,"in"))
+                      ) 
+
+
+ggplot() +
+  #geom_sf(data = countries, color = "#ffffff", fill="#ffffff") +
+  # geom_sf(col = "deepskyblue4", linewidth = 3) +
+  geom_sf(data = airports, aes(color = alt), size = 0.2, alpha=0.6) +
+  scale_color_gradientn(colours = cols5,
+                        values = rescale(c(-128, 0, 1000, 3000, 5000, 14418)), 
+                        limits=c(-128, 14418),
+                        guide=guide_colourbar(raster=TRUE,
+                                              barwidth=20, barheight = 0.3,
+                                              frame.colour="transparent",
+                                              frame.linewidth=0.5, ticks.colour="#222222", 
+                                              direction="horizontal",
+                                              title="Altitude (feet)")
+                        )+
+  geom_sf(data = airports %>% filter(alt < -20),
+          aes(color = alt), size = 2) +
+  geom_richtext(aes(x = airports[airports$iata=="BWC",]$long, 
+                 y = airports[airports$iata=="BWC",]$lat,
+                 label = "**1, 2, 4**"), size = 3.5,
+                 fill = NA, label.color = NA, color="#ffffff",
+                 hjust = 0.8, vjust = 0.9) +
+  geom_richtext(aes(x = airports[airports$iata=="GUW",]$long, 
+                 y = airports[airports$iata=="GUW",]$lat,
+                 label = "**3**"), size = 3.5,
+                 fill = NA, label.color = NA, color="#ffffff",
+                 hjust = -0.1) +
+  geom_richtext(aes(x = airports[airports$iata=="NSH",]$long, 
+                 y = airports[airports$iata=="NSH",]$lat,
+                 label = "**5**"), size = 3.5,
+                 fill = NA, label.color = NA, color="#ffffff",
+                 hjust = 0.3, vjust = 0.2) +
+  geom_richtext(aes(x = airports[airports$iata=="LLK",]$long, 
+                 y = airports[airports$iata=="LLK",]$lat,
+                 label = "**6**"), size = 3.5,
+                 fill = NA, label.color = NA, color="#ffffff",
+                 hjust = 0.3, vjust = 0.2) +
+  geom_richtext(aes(x = airports[airports$iata=="GBT",]$long, 
+                 y = airports[airports$iata=="GBT",]$lat,
+                 label = "**7**"), size = 3.5,
+                 fill = NA, label.color = NA, color="#ffffff",
+                 hjust = 0.2, vjust = 0.2) +
+  # geom_richtext(aes(x = airports[airports$iata=="LEY",]$long, 
+  #                y = airports[airports$iata=="LEY",]$lat,
+  #                label = "**8**"), size = 3.5,
+  #                fill = NA, label.color = NA, color="#ffffff",
+  #                hjust = 0.8, vjust = 0.2) +
+  # geom_richtext(aes(x = -110, y = -40,
+  #                  label = "**1.** Brawley Municipal Airport (BWC), U.S., -128<br>
+  #                  **2.** Thermal Jacqueline Cochran Regional Airport (TRM), U.S., -128<br>
+  #                  **3.** Atyrau Airport (GUW), Kazakhstan, -72"), size = 3.5,
+  #               fill = NA, label.color = NA, color="#ffffff") +
+  annotation_custom(
+      grob = text_grob, 
+      xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf)+
+  labs(title = "Airports Sitting Below Sea Level", 
+       caption = "Data source: EFIMPOLIANSKII @Kaggle | Jasmine Siyu Wu\nNote: Only displaying airports >= 20 meters below sea level. The dataset may not be complete."
+       ) +
+  map_theme()+
+  theme(plot.title = element_text(size = 15, face = "bold", color = "#ffffff"),
+        plot.subtitle = element_text(size=15),
+        plot.caption = element_text(size = 6, color = "#ffffff"),
+        legend.title = element_text(size = 9, color = "#ffffff"),
+        legend.text = element_text(size = 8, color = "#ffffff"),
+        legend.position = c(0.7, 0.02))
+
+
+ggsave("day27.jpeg", device = "jpeg", width = 10, height=6,
+       path = "Output")
+```
+
+
+## Day 29: Population map [Population density in the catchment areas (0.5 hour - 2 hours) of the businest U.S. airports]
+
+Reference (UK): https://simpleflying.com/uk-airports-catchment-areas-guide/
+
+
+https://www.data.gov.uk/dataset/ca2daae8-8f36-4279-b15d-78b0463c61db/uk-gridded-population-2011-based-on-census-2011-and-land-cover-map-2015
+
+
+
+
+
