@@ -1,0 +1,3098 @@
+---
+title: "Penn Travel Survey 2023 Markdown"
+author: "PennPraxis / Center for Safe Mobility"
+date: "August 1, 2023"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: "hide"
+    code_download: true
+    theme: lumen
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+#libraries
+# you may have to use install.packages to install it first
+library(tidyverse)
+library(lubridate)
+library(sf)
+library(stringr)
+library(viridis)
+library(osmdata)
+library(ggalluvial)
+library(kableExtra)
+library(ggmap)
+library(jsonlite)
+library(RColorBrewer)
+library(tigris)
+library(FNN)
+library(stplanr)
+library(maps)
+library(DT)
+library(leaflet)
+library(leaflet.extras)
+library(leaflet.providers)
+library(jsonlite)
+library(mapview)
+library(htmlwidgets)
+library(broom)
+library(tidycensus)
+library(shiny)
+library(ggmap)  
+library(sp)
+library(expss)
+library(vtable)
+library(mapsapi)
+library(xml2)
+library(XML)
+library(purrr)
+library(boxr)
+library(httr)
+
+
+root.dir = "https://raw.githubusercontent.com/urbanSpatial/Public-Policy-Analytics-Landing/master/DATA/"
+source("https://raw.githubusercontent.com/urbanSpatial/Public-Policy-Analytics-Landing/master/functions.r")
+
+# graphic themes
+
+plotTheme <- theme(
+  plot.title =element_text(size=12),
+  plot.subtitle = element_text(size=8),
+  plot.caption = element_text(size = 6),
+  axis.text.x = element_text(size = 10, angle = 45, hjust = 1),
+  axis.text.y = element_text(size = 10),
+  axis.title.y = element_text(size = 10),
+  # Set the entire chart region to blank
+  panel.background=element_blank(),
+  plot.background=element_blank(),
+  #panel.border=element_rect(colour="#F0F0F0"),
+  # Format the grid
+  panel.grid.major=element_line(colour="#D0D0D0",size=.75),
+  axis.ticks=element_blank())
+
+plotTheme12ptY <- theme(
+  plot.title =element_text(size=16),
+  plot.subtitle = element_text(size=8),
+  plot.caption = element_text(size = 6),
+  axis.text.x = element_text(size = 14, angle = 45, hjust = 1),
+  axis.text.y = element_text(size = 14),
+  axis.title.y = element_text(size = 14),
+  axis.title.x = element_text(size = 14),
+  # Set the entire chart region to blank
+  panel.background=element_blank(),
+  plot.background=element_blank(),
+  #panel.border=element_rect(colour="#F0F0F0"),
+  # Format the grid
+  panel.grid.major=element_line(colour="#D0D0D0",size=.75),
+  axis.ticks=element_blank())
+
+mapTheme <- function(base_size = 12) {
+  theme(plot.title =element_text(size=12),
+                  plot.subtitle = element_text(size=8),
+                  plot.caption = element_text(size = 6),
+                  axis.line=element_blank(),
+                  axis.text.x=element_blank(),
+                  axis.text.y=element_blank(),
+                  axis.ticks=element_blank(),
+                  axis.title.x=element_blank(),
+                  axis.title.y=element_blank(),
+                  panel.background=element_blank(),
+                  panel.border=element_blank(),
+                  panel.grid.major=element_line(colour = 'transparent'),
+                  panel.grid.minor=element_blank(),
+                  legend.direction = "vertical", 
+                  legend.position = "right",
+                  plot.margin = margin(1, 1, 1, 1, 'cm'),
+                  legend.key.height = unit(1, "cm"), legend.key.width = unit(0.2, "cm")
+  )}
+
+palette <- c("#10142A", "#47E9B9", "#F55D60", "#71EA48", "#C148EA", "EAC148" )
+viridisPalette <- c("#440154", "#73D055", "#F55D60", "#238A8D", "#FDE725")
+```
+
+
+```{r functions, include=FALSE}
+#function to calculate the distribution of values in any given column with the option to group by another column
+calculate_share <- function(dat, col, facetCol = "") {
+  if(facetCol != ""){
+    dat <- dat %>%
+                  group_by(!!sym(col), !!sym(facetCol)) %>% 
+                  summarise(count = n()) %>% 
+                  group_by(!!sym(facetCol)) %>%
+                  mutate(share = count/sum(count)*100)
+  }
+  else {
+    dat <- dat %>% 
+                  group_by(!!sym(col)) %>% 
+                  summarize(count = n()) %>% 
+                  mutate(share = count/sum(count)*100)
+  }
+  return(dat)
+}
+```
+
+
+
+```{=html}
+<style>
+  .superbigimage{
+      overflow-x:scroll;
+      white-space: nowrap;
+  }
+
+  .superbigimage img{
+     max-width: none;
+  }
+
+
+</style>
+```
+
+
+__*INTERNAL DOCUMENT, NOT FOR DISTRIBUTION*__
+
+
+# Overview
+
+This document contains analyses and interpretations of the data collected from the 
+University of Pennsylvania Commuter Travel Survey 2023, led by PennPraxis' **Prof. Megan Ryerson**, 
+UPS Chair of Transportation and **Prof. Michael Fichman** and delivered to the Sustainability 
+Office of the University of Pennsylvania Division of Facilities and Real Estate Services 
+(FRES) and Business Services Division (BSD). The document is designed to 
+support the Penn Commuter Survey Report 2023 by providing technical details. 
+In this document, you will find data wrangling, variable engineering, and a 
+data dictionary (Appendix) of the survey data, in addition to scripts that analyze 
+data and result in findings.
+
+
+# How To Use This Document
+
+**What is this document** - This is an 'R Markdown' document designed to provide a 
+more readable and dynamic interface for outputs from data analysis done using the 
+statistical software language R.
+
+**What is in this document** - The document is organized into 6 major sections: 
+
+1. **Executive Summary** summarizes the main findings and recommendations drawn from 
+the commuter travel survey.
+
+2. **About Penn Commuter Travel Survey 2023** describes the background and methods 
+of the Penn Commuter Travel Survey 2023
+
+3. **Data Wrangling & Variable Engineering** provides details of data cleaning, processing, 
+and engineering with annotations.
+
+4. **How Penn Employees Get to and From Work** navigates through the analytical steps 
+where the research team reached the key findings of Penn commuter travel behaviors. 
+
+5. **Sustainability Implications of Travel Behavior** takes a deep dive into commuter 
+travel behaviors with a focus on the implications of environmental impacts and 
+sustainable developments.
+
+6. **Appendix - Data Dictionary** lists out all variables collected from the survey (raw) 
+and used for the analysis (engineered) with short descriptions.
+
+**How to navigate this document** - You can use the **tabs** in the `Section` and 
+**table of contents** at the left of your screen to navigate the document. Section 
+tabs are used for jumping between major sections of the document, and the table of contents 
+contains direct links for all sub-sections.
+
+**Where to find analysis scripts** - All scripts are by default folded. They can be 
+easily displayed by clicking the `code` buttons in text lines to collapse/hide 
+individual code blocks, or by clicking the `code` button on the top-right corner of 
+this document and selecting "Show/Hide All Code" in the dropdown menu. In this menu, 
+you can also "Download Rmd" at once to access the original RMarkdown file used to 
+generate this document.
+
+**What interactive features are in this document** - This document also contains embedded 
+interactive maps that enable users explore the spaces at more granular level. Expand 
+the document to fit the maximum extent of your screen to make sure you can access 
+all of the menus in the dynamic map.
+
+
+
+# Sections {.tabset}
+
+## 1. Executive Summary 
+
+In February and March of 2023, PennPraxis and the Center for Safe Mobility 
+deployed an employee travel survey on behalf of The Sustainability Office of 
+the University of Pennsylvania Office of Facilities and Real Estate Services (FRES). 
+The survey collected information about employee travel patterns and attitudes. 
+It was designed to allow FRES and its University partners to work towards decreasing 
+the University’s carbon footprint using incentives to promote lower-carbon travel.
+
+The Research Team found that University of Pennsylvania commuters make strong use 
+of sustainable transit options. Penn employees use transit at a rate seven times 
+the average commuter in the Philadelphia region, bike more than three times as much, 
+and they walk almost ten times more than the regional rate.  However, there is still 
+some unmet demand for sustainable commute options.
+
+Penn employees reported varied travel behavior - most traveling to work 3, 4 or 5 
+days per week. Roughly ⅕ of commuters use a mix of transportation modes depending 
+on the trip and the day. Some include periodic driving in their mix.There is no 
+dominant commuter type or pattern - there is a collection of user groups.  
+
+Over half of Penn commuters make use of university commuter benefit programs, 
+including WageWorks, and the Bicycle Commuter Reimbursement Program. However, 
+these programs don’t align well with the ways employees choose to travel to work, 
+and participation could be increased if pass options and discounts catered to the 
+frequency and mix of existing patterns.
+
+The high level of sustainable transit use is associated with the fact that many 
+Penn employees live in locations with good access to work via transit, walking, 
+or biking. Users who have access to transit tend to use it. Others want to use 
+it, and have access, but can’t for a variety of reasons. These impediments include 
+barriers related to service - access, convenience, and perceptions of safety, and 
+the fact that transit is not an attractive option in some areas of the region.
+
+Many subjects expressed interest in purchasing electric vehicles (EVs), which might 
+mean a need for more charging facilities. However, EV purchases are likely not 
+going to change current commute patterns. There is also demand for sustainable 
+long-distance transportation options.
+
+The University can encourage increased sustainable transit use with strategic 
+messaging campaigns and savvy programs. Public transit options can be interpreted 
+with campus signage and messaging. Subsidies can be tweaked to meet employees where 
+they are and nudge them towards transit use. Programs can be promoted selectively 
+to likely users. There is also an opportunity to work with transit agencies in an 
+attempt to facilitate better travel options for groups of Penn employees who are 
+predisposed to using transit but don’t have options that work for them.
+
+
+## 2. About Penn Travel Survey 2023
+
+### 2.1. Background 
+
+The Sustainability Office of the University of Pennsylvania Office of Facilities 
+and Real Estate Services (FRES) commissioned the Weitzman School of Design’s PennPraxis 
+and the Center for Safe Mobility (“the Research Team”) to design and execute a 
+commuter behavior survey. The survey, deployed in Spring, 2023, collected information 
+about employee travel patterns and attitudes. It was designed to allow FRES and 
+its partners at the University to work towards decreasing the University’s carbon 
+footprint using incentives to promote lower-carbon travel. Commuting and long-distance 
+travel are key contributors to the carbon footprint of the University, which is the 
+region’s largest employer^[Source: https://selectgreaterphl.com/doingbusiness/largestemployers/]. 
+
+This survey was commissioned to fill an information gap regarding travel behavior. 
+The University relies on observations, travel-related purchasing, and commuter 
+benefits program participation to understand travel behavior. However, since only 
+half of Penn employees enroll in transit benefits programs, a lot was unknown. 
+With new, up-to-date data, FRES and other University divisions can make more informed 
+decisions about programs to encourage sustainable community choices - taking transit, 
+walking, carpooling, and biking, and choosing lower-carbon long-distance travel.
+
+
+### 2.2. Methods
+
+#### 2.2.1. Consultations
+
+This project was initiated in early 2021. The Research Team began by interviewing 
+stakeholders with FRES and Penn Business Services about University programs, sustainability 
+goals, and scenarios for future transportation at the University^[The following were 
+among those interviewed or consulted regarding the nature or content of this survey: 
+Anne Papageorge, Mark Mills, Marie Witt, Nina Morris, Jack Heuer, Brian Manthe, 
+Natalie Walker, Heidi Wunder, Elizabeth Main, Taylor Berkowitz, Mark Kocent]. This process was 
+iterated as the survey was redesigned to adjust to changes in the commuting environment 
+related to the COVID-19 pandemic. The Research Team consulted the Office of Diversity, 
+Equity and Inclusion and vetted the survey questions. University Research Services was 
+consulted about the need for an IRB, which was waived.
+
+
+#### 2.2.2. Survey Design
+
+The survey was designed to collect information from paid faculty and staff 
+to the University who are eligible for subsidized transit programs. It does not 
+include students (except those employed by the University). Questions covered 
+demographic and economic information, work status, weekly commuting travel behaviors, 
+participation in Penn transit programs, environmental awareness, work-related 
+long-distance travel choices, and preferences for designed commute scenarios. 
+The initial survey was written in April 2021 and rewritten in Fall 2022, The 
+survey was administered using Qualtrics, including the Team’s custom-built applications 
+to collect geo-located origin/destination information using interactive mapping applications.
+
+
+#### 2.2.3. Dissemination
+
+The survey was launched on February 20, 2023, after a promotional campaign led by 
+FRES communications staff. Participation was encouraged through emails to paid
+employees from numerous channels across the University. It was open for 37 days.
+
+
+#### 2.2.4. Survey Sample
+
+Survey participation was strong. Across 28 schools and divisions, there were 4111 valid 
+responses, including 754 graduate students and 3357 staff and faculty, the latter covering 
+over 14% of Penn’s employees^[Data source: Division of Human Resources University of Pennsylvania, 
+data retrieved in June 2023]. The responses are generally even across schools and 
+divisions^[Importantly, the Perelman School of Medicine (32.9% of employees at Penn) 
+accounted for 30.4% of all responses.]. 
+
+
+```{r school division table, warning = FALSE, message = FALSE, echo=FALSE}
+
+# calculate_share(dat, "schoolDivision") %>% 
+#   select(schoolDivision, share) %>% 
+#   filter(share != "", schoolDivision != "") %>% 
+#   st_drop_geometry() %>% 
+#   arrange(-share) %>% 
+#   rename("School Division" = schoolDivision, "Share (%)" = share)%>% 
+#   kable(., "html", digits=1, align = "lccrr") %>%
+#   kable_styling()
+
+```
+
+
+Staff were oversampled slightly relative to faculty^[64% of respondents were staff, 
+17% were faculty, and 19% were graduate students. The staff/faculty ratio at Penn 
+is about 2.1, including fixed-term temporary staff.].
+
+```{r work status plots, warning = FALSE, message = FALSE, fig.width=10, fig.height=3, echo=FALSE}
+
+# ggplot(calculate_share(dat, "workStatus"),
+#   aes(x=workStatus, y=share))+
+#   geom_bar(stat='identity',fill = '#FE6822')+   
+#    geom_text(aes(label=round(share, digits=1)), 
+#                       position=position_dodge(width=0.9), hjust =-0.1, size=5) +
+#   labs(title = "Subjects split by work status",
+#        x="Work status \n",
+#        y="\n% share",
+#        subtitle=paste("Total responses = ", dat %>% 
+#          filter(workStatus != "") %>% 
+#          tally()))+
+#   plotTheme12ptY+
+#   coord_flip()
+
+```
+
+
+#### 2.2.5. Analysis
+
+The Research Team analyzed the data in April and May of 2023. The Research Team 
+created driving, walking, and transit itineraries for each subject using Google 
+Maps API. The travel itineraries calculation allowed researchers to understand 
+each survey participant's travel time and distance constraints. Using reported 
+subject attributes, behavior, and preferences, the Research Team built descriptive 
+statistics, cross-tabulations, and statistical models to comprehend the importance 
+of economic, locational, and behavioral factors on subject commuting choices and 
+the utilization of subsidy programs.
+
+
+## 3. Data Wrangling & Variable Engineering 
+
+The raw survey data was collected and exported from Qualtrics, an cloud-based 
+platform for creating and distributing web-based surveys. After initial data cleaning 
+process (e.g. renaming columns), we generated the final analysis dataset called 
+`PennTravelSurvey2023_FinalData.csv` and stored it in a protected PennBox folder.
+In this section, we will read this survey dataset and other useful datasets (e.g. commute trip
+distances and durations) to finish final data cleaning and variable engineering steps, 
+which create the variables used for analysis.
+
+The data wrangling process includes:
+
+- Eliminate supurfluous rows - get rid of (first two) rows without observations 
+(i.e., the question titles and metadata)
+
+- Eliminate partial responses: surveys which are less than 2/3rds (66%) done using 
+a variable called `Progress`, which is reported by Qualtrics 
+
+
+```{r connect box r, warning = FALSE, message = FALSE, include=FALSE, results='hide'}
+# connect with Box Folder containing data
+# Jasmine's Box keys - hidden but not removed in order to knit the Rmarkdown
+# please don't use them :)
+box_auth(client_id = "dw9s352a0utgn8gpktlvg0txeduycjv2", 
+         client_secret = "r9naYwymQ5TkTWD51t9AQGMADdpjwd6L")
+```
+
+
+
+```{r load and clean data, warning = FALSE, message = FALSE, include=TRUE, results='hide'}
+# connect with Box Folder containing data
+# box_auth(client_id = "fillwithyourid", 
+#          client_secret = "fillwithyoursecretcode")
+
+# access the Box folder
+box_setwd(221658030069)
+
+# check IDs of files in the Box folder for data reading/writing
+box_ls()
+# PennTravelSurvey2023_FinalData.csv       1280260243050 
+
+
+# -99 means data unanswered but seen
+## read in a csv from the Box folder
+dat <- box_read_csv(1280260243050)
+# Create Question Key
+questionKey <- dat[1,]
+
+# Eliminate supurfluous rows
+# Get rid of rows without observations (e.g. the question titles and metadata)
+dat <-  dat %>%
+  .[-c(1, 2), ]  
+
+# Eliminate partial responses:
+# surveys which are less than 2/3rds done
+dat <- dat %>%
+  filter(Status == "IP Address",
+         as.numeric(as.character(Progress)) > 66,
+         as.Date(StartDate) > as.Date("2023-02-19"),
+         workStatus == "Staff" | workStatus == "Graduate Student" | workStatus =="Faculty") 
+
+#saving the cleaned dataset which will be used to call the googleAPI for distance and duration calculations for driving, transit and walking between the origin and destination for each respondent
+# box_write(dat, "validResponses.Rdata")
+```
+
+
+- Import and merge travel distance and duration calculation results generated from the 
+Google Maps APIs to survey subjects using `ResponseId`
+
+  - The scripts of travel distance and duration using Google Maps APIs are commented out 
+  in the following code blocks. The calculation results were saved as RData and can be
+  read simply using the `box_read` function. The calculation scripts are included as a 
+  reference for how to use Google Maps Distance Matrix API.
+
+  - The Google Maps Distance Matrix API is a service that accepts an HTTPS request 
+  containing origins and destinations for a given mode of transport. For each combination 
+  of origin and destination, it returns travel distance and duration. In our analysis, we
+  obtained travel distance and duration for multiple transportation modes: transit, 
+  driving, and walking.
+
+```{r load travel distance data, warning = FALSE, message = FALSE, include=TRUE, results='hide'}
+
+# The following scripts were used to query the Google Maps API for time taken and distance covered by transit, driving, and walking.
+# These were calculated using the origin and destination provided by each survey respondent.
+# info here: https://cran.rstudio.com/web/packages/mapsapi/vignettes/intro.html#Distance_Matrix
+
+# Load API key - This shouldn't be pushed to github because Google might flag it and lock access. Store it locally
+# and add it in when running the script
+# key = "your api key"
+
+# Load qaulity respondes from survey data
+# validResponses.Rdata      1280257892918 
+# dat <- box_read(1280257892918)
+
+# Extract lat/lon
+# complt_latlon <- function(string) {
+#   complt <- ifelse(nchar(string)>60, 2, ifelse(nchar(string)==0, "", ifelse(str_detect(string, "^\\{0"), 0, 1)))
+#   return(complt)
+# }
+# 
+# latlon_o_lat <- function(string) {                                    
+#   lat_o <- str_match(string, "0:\\{lat:(.*?),lng")[,2]
+#   return(lat_o)
+# }
+# 
+# latlon_d_lat <- function(string) {                                    
+#   lat_d <- str_match(string, "1:\\{lat:(.*?),lng")[,2]
+#   return(lat_d)
+# }
+# 
+# latlon_o_lon <- function(string) {                                    
+#   lon_o <- str_match(string, "lng:(.*?)\\}")[,2]
+#   return(lon_o)
+# }
+# 
+# latlon_d_lon <- function(string) {                                    
+#   lon_d <- str_match(string, "1:\\{(.*?)lng:(.*?)\\}\\}")[,3]
+#   return(lon_d)
+# }
+# 
+# # Extract latlong of the origin and destination of each respondent
+# dat$od_unli <- gsub("\"","",unlist(dat$odtest))
+# dat$originlat <- ifelse(complt_latlon(dat$od_unli)==""|complt_latlon(dat$od_unli)==1, "", latlon_o_lat(dat$od_unli))
+# dat$originlon <- ifelse(complt_latlon(dat$od_unli)==""|complt_latlon(dat$od_unli)==1, "", latlon_o_lon(dat$od_unli))
+# dat$destinlat <- ifelse(complt_latlon(dat$od_unli)==""|complt_latlon(dat$od_unli)==0, "", latlon_d_lat(dat$od_unli))
+# dat$destinlon <- ifelse(complt_latlon(dat$od_unli)==""|complt_latlon(dat$od_unli)==0, "", latlon_d_lon(dat$od_unli))
+
+# For respondents that typed in the name of their destination instead of using the map, store the latitude and longitude
+# each school
+# destination_generator_lat <- function(school_name) {
+#   school_lat <- ifelse(school_name == "Weitzman School of Design", 39.95251027344135, ifelse(
+#     school_name == "Institute of Contemporary Art", 39.95426407143306, ifelse(
+#       school_name == "Carey School of Law", 39.95428661095822, ifelse(
+#         school_name == "Division of Public Safety", 39.955388862825046, ifelse(
+#           school_name == "Division of Recreation & Intercollegiate Athletics", 39.95104256392332, ifelse(
+#             school_name == "Office of the Executive Vice President", 39.95356459437801, ifelse(
+#               school_name == "Graduate School of Education", 39.95350924591502, ifelse(
+#                 school_name == "Division of Human Resources", 39.953564595978, ifelse(
+#                   school_name == "School of Engineering and Applied Science", 39.95175223640792, ifelse(
+#                     school_name == "The Wharton School", 39.95198095335446, ifelse(
+#                       school_name == "School of Nursing", 39.94909315193392, ifelse(
+#                         school_name == "School of Social Policy and Practice", 39.952683848500456, ifelse(
+#                           school_name == "School of Arts and Sciences", 39.951573455003604, ifelse(
+#                             school_name == "Penn Libraries", 39.95276595328487, ifelse(
+#                               school_name == "Division of Facilities and Real Estate Services", 39.952427052106465, ifelse(
+#                                 school_name == "Information Systems and Computing", 39.953188645282395, ifelse(
+#                                   school_name == "Office of the President", 39.951682123769146, ifelse(
+#                                     school_name == "School of Veterinary Medicine", 39.9500250542087, 39.952407922579816
+#                                   )
+#                                 )
+#                               )
+#                             )
+#                           )
+#                           
+#                         )
+#                       ))
+#                   )
+#                 )
+#                 
+#               )
+#             )
+#           )
+#         )
+#       )
+#     )
+#   ))
+#   return(school_lat)
+# }
+# 
+# destination_generator_lon <- function(school_name) {
+#   school_lon <- ifelse(school_name == "Weitzman School of Design", -75.19240335419433, ifelse(
+#     school_name == "Institute of Contemporary Art", -75.19466708833744, ifelse(
+#       school_name == "Carey School of Law", -75.19290851937039, ifelse(
+#         school_name == "Division of Public Safety", -75.20380275807258, ifelse(
+#           school_name == "Division of Recreation & Intercollegiate Athletics", -75.19044572808572, ifelse(
+#             school_name == "Office of the Executive Vice President", -75.19377757870201, ifelse(
+#               school_name == "Graduate School of Education", -75.19711485371828, ifelse(
+#                 school_name == "Division of Human Resources", -75.19386340979683, ifelse( 
+#                   school_name == "School of Engineering and Applied Science", -75.19097425907968, ifelse(
+#                     school_name == "The Wharton School", -75.19877876802803, ifelse(
+#                       school_name == "School of Nursing", -75.19599610576334, ifelse(
+#                         school_name == "School of Social Policy and Practice", -75.19752429478379, ifelse(
+#                           school_name == "School of Arts and Sciences", -75.19474558317795, ifelse(
+#                             school_name == "Penn Libraries", -75.19357603476075, ifelse(
+#                               school_name == "Division of Facilities and Real Estate Services", -75.18657388140026, ifelse(
+#                                 school_name == "Information Systems and Computing", -75.19229792261442, ifelse(
+#                                   school_name == "Office of the President", -75.19371934955595, ifelse(
+#                                     school_name == "School of Veterinary Medicine", -75.19992979372026, -75.19320296510115
+#                                   )
+#                                 )
+#                               )
+#                             )
+#                           )
+#                           
+#                         )
+#                       ))
+#                   )
+#                 )
+#                 
+#               )
+#             )
+#           )
+#         )
+#       )
+#     )
+#   ))
+#   return(school_lon)
+# }
+
+# Update the dataframe to have all the lat/longs of the destinations
+# dat$destinlat <- ifelse(dat$destinlat == "", destination_generator_lat(dat$schoolDivision), dat$destinlat)
+# dat$destinlon <- ifelse(dat$destinlon == "", destination_generator_lon(dat$schoolDivision), dat$destinlon)
+
+# Delete the responses that don't have lat or lon for the origin
+# dat_od <- dat[-which(dat$originlat == "" | dat$originlon == ""), ]
+
+
+# dat_od_geo <- dat_od[,c("originlat","originlon","destinlat","destinlon")]
+# dat_od_geo.sf <- st_as_sf(dat_od_geo, coords = c("originlat","originlon"), crs = 4326)
+# dat_od_geo.sf$des <- st_as_sf(as.data.frame(dat_od_geo.sf), coords = c("destinlat","destinlon"), remove = TRUE)
+# dat_od_geo.sf <- dat_od_geo.sf %>% st_as_sf(crs = 4326) 
+# dat_od_geo_lonlat.sf <- st_as_sf(dat_od_geo, coords = c("originlon", "originlat"), crs = 4326)
+
+
+#------------------------------------------------------------------------------
+
+#function to call the api for every respondent's commute 
+# get_dist_time <- function(df){
+#   outputData <- data.frame(ResponseId = character(), 
+#                       distance_transit = numeric(),             
+#                       duration_transit = numeric(),
+#                       distance_driving = numeric(),
+#                       duration_driving = numeric(),
+#                       distance_walking = numeric(),
+#                       duration_walking = numeric())
+# 
+#   for(i in 1:nrow(df)){
+#     #mp_matrix is the function from the R package that connects to the API
+#     result_transit = mp_matrix(
+#       origin = c(df$originlon[i] %>% as.numeric(),
+#                  df$originlat[i] %>% as.numeric()),
+#       destination = c(df$destinlon[i] %>% as.numeric(),
+#                     df$destinlat[i] %>% as.numeric()),
+#       mode="transit",
+#       key=key
+#     ) 
+#     result_driving = mp_matrix(
+#       origin = c(df$originlon[i] %>% as.numeric(),
+#                  df$originlat[i] %>% as.numeric()),
+#       destination = c(df$destinlon[i] %>% as.numeric(),
+#                       df$destinlat[i] %>% as.numeric()),
+#       mode="driving",
+#       key=key
+#     )
+#     result_walking = mp_matrix(
+#       origin = c(df$originlon[i] %>% as.numeric(),
+#                  df$originlat[i] %>% as.numeric()),
+#       destination = c(df$destinlon[i] %>% as.numeric(),
+#                       df$destinlat[i] %>% as.numeric()),
+#       mode="walking",
+#       key=key
+#     )
+#     # extract only necessary information from the matrix returned by API
+#     outputData[i, "distance_transit"] <- mp_get_matrix(result_transit, value = "distance_m")
+#     outputData[i, "duration_transit"] <- mp_get_matrix(result_transit, value = "duration_s")
+#     outputData[i, "distance_driving"] <- mp_get_matrix(result_driving, value = "distance_m")
+#     outputData[i, "duration_driving"] <- mp_get_matrix(result_driving, value = "duration_s")
+#     outputData[i, "distance_walking"] <- mp_get_matrix(result_walking, value = "distance_m")
+#     outputData[i, "duration_walking"] <- mp_get_matrix(result_walking, value = "duration_s")
+#     outputData[i, "ResponseId"] <- df[i, "ResponseId"]
+#   }
+#   return(outputData)
+# }
+
+#get the duration and distance for each mode for each respondent's commute and save it
+# to be joined to the original dataset with answers to all other questions
+# results <- get_dist_time(dat_od)
+# box_write(results, "distanceDurationNew.Rdata")
+
+#-------------------------------------------------------------------------------
+
+#getting routes for each mode of travel
+# get_routes <- function(df){
+#   routesData <- data.frame(ResponseId = character(),
+#                            driving = c(),
+#                            transit = c(),
+#                            walking = c())
+#   
+#   for(i in 1:5){
+#     #mp_matrix is the function from the R package that connects to the API
+#     driving = mp_directions(
+#       origin = c(df$originlon[i] %>% as.numeric(),
+#                  df$originlat[i] %>% as.numeric()),
+#       destination = c(df$destinlon[i] %>% as.numeric(),
+#                       df$destinlat[i] %>% as.numeric()),
+#       mode="driving",
+#       key=key,
+#       quiet=TRUE
+#     ) 
+#     transit = mp_directions(
+#       origin = c(df$originlon[i] %>% as.numeric(),
+#                  df$originlat[i] %>% as.numeric()),
+#       destination = c(df$destinlon[i] %>% as.numeric(),
+#                       df$destinlat[i] %>% as.numeric()),
+#       mode="transit",
+#       key=key,
+#       quiet=TRUE
+#     )
+#     walking = mp_directions(
+#       origin = c(df$originlon[i] %>% as.numeric(),
+#                  df$originlat[i] %>% as.numeric()),
+#       destination = c(df$destinlon[i] %>% as.numeric(),
+#                       df$destinlat[i] %>% as.numeric()),
+#       mode="walking",
+#       key=key,
+#       quiet=TRUE
+#     )
+#   
+#     doc_driving = as_xml_document(driving)
+#     doc_transit = as_xml_document(transit)
+#     doc_walking = as_xml_document(walking)
+#     routesData[i, "driving"] <- mp_get_routes(doc_driving)
+#     routesData[i, "transit"] <- mp_get_routes(doc_driving)
+#     routesData[i, "walking"] <- mp_get_routes(doc_driving)
+#     routesData[i, "ResponseId"] <- df[i, "ResponseId"]
+#   }
+#   return (routesData)
+# }
+
+#  
+# routes_results <- get_routes(dat_od)
+
+# -----------------------------------------------------------------------------
+
+# loading the results of the Google Maps API request
+# distanceDurationNew.Rdata      1280249749891  
+results <- box_read(1280249749891)
+
+dat <- left_join(dat, results, by="ResponseId")
+dat$duration_driving <- ifelse(!is.na(dat$duration_driving),  
+                               dat$duration_driving/60, dat$duration_driving)
+dat$duration_transit <- ifelse(!is.na(dat$duration_transit),  
+                               dat$duration_transit/60, dat$duration_transit)
+dat$duration_walking <- ifelse(!is.na(dat$duration_walking),  
+                               dat$duration_walking/60, dat$duration_walking)
+dat$distance_driving <- ifelse(!is.na(dat$distance_driving),
+                               dat$distance_driving*0.000621371, dat$distance_driving)
+dat$distance_transit <- ifelse(!is.na(dat$distance_transit),
+                               dat$distance_transit*0.000621371, dat$distance_transit)
+dat$distance_walking <- ifelse(!is.na(dat$distance_walking),
+                               dat$distance_walking*0.000621371, dat$distance_walking)
+
+```
+
+- Extract the latitude and longitude of the origin and destination of each subject's 
+commuting trip and "spatialize" the data using subjects' origin (home) locations
+
+- Plot survey subjects' origin address to locate people' living too far away from the campus's residences
+
+
+- Clean out responses with origin address too far from campus (e.g. Texas)
+
+  - In this step, we manually remove 14 subjects using their `ResponseId`
+
+```{r remove distant origins, message=FALSE, warning=FALSE, include=TRUE, results='hide'}
+
+#extract the latitude and longitude of the origin and destination of each trip
+dat <- dat %>% 
+  filter(odtest != "" & (grepl(',\"\"1\"\":', odtest))) %>% #  ,"1":
+    mutate(
+          origin_lat = as.numeric(sub('.*""0"":\\{""lat"":(\\d+\\.\\d+),""lng"":.*', '\\1', odtest)),
+          origin_long = as.numeric(sub('.*""0"":\\{""lat"":\\d+\\.\\d+,""lng"":(\\-\\d+\\.\\d+).*', '\\1', odtest)),
+          dest_lat = as.numeric(sub('.*""1"":\\{""lat"":(\\d+\\.\\d+),""lng"":.*', '\\1', odtest)),
+          dest_long = as.numeric(sub('.*""1"":\\{""lat"":\\d+\\.\\d+,""lng"":(\\-\\d+\\.\\d+).*', '\\1', odtest)))
+  # mutate(
+  #         origin_lat = as.numeric(sub('.*"0":\\{"lat":(\\d+\\.\\d+),"lng":.*', '\\1', odtest)),
+  #         origin_long = as.numeric(sub('.*"0":\\{"lat":\\d+\\.\\d+,"lng":(\\-\\d+\\.\\d+).*', '\\1', odtest)),
+  #         dest_lat = as.numeric(sub('.*"1":\\{"lat":(\\d+\\.\\d+),"lng":.*', '\\1', odtest)),
+  #         dest_long = as.numeric(sub('.*"1":\\{"lat":\\d+\\.\\d+,"lng":(\\-\\d+\\.\\d+).*', '\\1', odtest)))
+
+
+
+#keep only the origin coordinates
+dat <- st_as_sf(dat, coords=c("origin_long", "origin_lat"), crs=4326) 
+
+
+complt_latlon <- function(string) {
+  complt <- ifelse(nchar(string)>60, 2, ifelse(nchar(string)==0, "", ifelse(str_detect(string, "^\\{0"), 0, 1)))
+  return(complt)
+}
+
+latlon_o_lat <- function(string) {                                    
+  lat_o <- str_match(string, "0:\\{lat:(.*?),lng")[,2]
+  return(lat_o)
+}
+
+latlon_d_lat <- function(string) {                                    
+  lat_d <- str_match(string, "1:\\{lat:(.*?),lng")[,2]
+  return(lat_d)
+}
+
+latlon_o_lon <- function(string) {                                    
+  lon_o <- str_match(string, "lng:(.*?)\\}")[,2]
+  return(lon_o)
+}
+
+latlon_d_lon <- function(string) {                                    
+  lon_d <- str_match(string, "1:\\{(.*?)lng:(.*?)\\}\\}")[,3]
+  return(lon_d)
+}
+
+#extract latlon
+dat$od_unli <- gsub("\"","",unlist(dat$odtest))
+dat$originlat <- ifelse(complt_latlon(dat$od_unli)==""|complt_latlon(dat$od_unli)==1, "", latlon_o_lat(dat$od_unli))
+dat$originlon <- ifelse(complt_latlon(dat$od_unli)==""|complt_latlon(dat$od_unli)==1, "", latlon_o_lon(dat$od_unli))
+dat$destinlat <- ifelse(complt_latlon(dat$od_unli)==""|complt_latlon(dat$od_unli)==0, "", latlon_d_lat(dat$od_unli))
+dat$destinlon <- ifelse(complt_latlon(dat$od_unli)==""|complt_latlon(dat$od_unli)==0, "", latlon_d_lon(dat$od_unli))
+
+#use school to give destination location
+destination_generator_lat <- function(school_name) {
+  school_lat <- ifelse(school_name == "Weitzman School of Design", 39.95251027344135, ifelse(
+    school_name == "Institute of Contemporary Art", 39.95426407143306, ifelse(
+      school_name == "Carey School of Law", 39.95428661095822, ifelse(
+        school_name == "Division of Public Safety", 39.955388862825046, ifelse(
+          school_name == "Division of Recreation & Intercollegiate Athletics", 39.95104256392332, ifelse(
+            school_name == "Office of the Executive Vice President", 39.95356459437801, ifelse(
+              school_name == "Graduate School of Education", 39.95350924591502, ifelse(
+                school_name == "Division of Human Resources", 39.953564595978, ifelse(
+                  school_name == "School of Engineering and Applied Science", 39.95175223640792, ifelse(
+                    school_name == "The Wharton School", 39.95198095335446, ifelse(
+                      school_name == "School of Nursing", 39.94909315193392, ifelse(
+                        school_name == "School of Social Policy and Practice", 39.952683848500456, ifelse(
+                          school_name == "School of Arts and Sciences", 39.951573455003604, ifelse(
+                            school_name == "Penn Libraries", 39.95276595328487, ifelse(
+                              school_name == "Division of Facilities and Real Estate Services", 39.952427052106465, ifelse(
+                                school_name == "Information Systems and Computing", 39.953188645282395, ifelse(
+                                  school_name == "Office of the President", 39.951682123769146, ifelse(
+                                    school_name == "School of Veterinary Medicine", 39.9500250542087, 39.952407922579816
+                                  )
+                                )
+                              )
+                            )
+                          )
+                          
+                        )
+                      ))
+                  )
+                )
+                
+              )
+            )
+          )
+        )
+      )
+    )
+  ))
+  return(school_lat)
+}
+
+destination_generator_lon <- function(school_name) {
+  school_lon <- ifelse(school_name == "Weitzman School of Design", -75.19240335419433, ifelse(
+    school_name == "Institute of Contemporary Art", -75.19466708833744, ifelse(
+      school_name == "Carey School of Law", -75.19290851937039, ifelse(
+        school_name == "Division of Public Safety", -75.20380275807258, ifelse(
+          school_name == "Division of Recreation & Intercollegiate Athletics", -75.19044572808572, ifelse(
+            school_name == "Office of the Executive Vice President", -75.19377757870201, ifelse(
+              school_name == "Graduate School of Education", -75.19711485371828, ifelse(
+                school_name == "Division of Human Resources", -75.19386340979683, ifelse( 
+                  school_name == "School of Engineering and Applied Science", -75.19097425907968, ifelse(
+                    school_name == "The Wharton School", -75.19877876802803, ifelse(
+                      school_name == "School of Nursing", -75.19599610576334, ifelse(
+                        school_name == "School of Social Policy and Practice", -75.19752429478379, ifelse(
+                          school_name == "School of Arts and Sciences", -75.19474558317795, ifelse(
+                            school_name == "Penn Libraries", -75.19357603476075, ifelse(
+                              school_name == "Division of Facilities and Real Estate Services", -75.18657388140026, ifelse(
+                                school_name == "Information Systems and Computing", -75.19229792261442, ifelse(
+                                  school_name == "Office of the President", -75.19371934955595, ifelse(
+                                    school_name == "School of Veterinary Medicine", -75.19992979372026, -75.19320296510115
+                                  )
+                                )
+                              )
+                            )
+                          )
+                          
+                        )
+                      ))
+                  )
+                )
+                
+              )
+            )
+          )
+        )
+      )
+    )
+  ))
+  return(school_lon)
+}
+#destination coords based on school 
+dat$destinlat <- ifelse(dat$destinlat == "", destination_generator_lat(dat$schoolDivision), dat$destinlat)
+dat$destinlon <- ifelse(dat$destinlon == "", destination_generator_lon(dat$schoolDivision), dat$destinlon)
+
+
+## plot origin address to locate people living too far away from the campus!
+
+
+# mapview(dat, cex = 3)  #, zcol = "ResponseId"
+
+# cleaning out responses with too far origin address
+dat <- dat %>%
+  filter(!ResponseId %in% c("R_1jTkDNtXYgJM8ts",
+                            "R_R2AR8W2ZfqyfnXP",
+                           "R_1Dr1s1bBBNB6QdP",
+                           "R_3k6XARHC6pwv6OA",
+                           "R_27KA6JTFgq2IXbG",
+                           "R_voX6ZI2zM9exhBf",
+                           "R_9ZAn0r4wOTxXMkh",
+                           "R_usMlp6UgOu0ddNn",
+                           "R_3qk535VqLBsmcy2",
+                           "R_2eUs1avXom98lA7",
+                           
+                           "R_3iR4nFqvfWtWivU",
+                           "R_3npBBdSv53BZ4zj",
+                           "R_3iVYcw5gogpxDsm",
+                           "R_2ydBN6LrpCfTK35"))
+
+# "R_3iR4nFqvfWtWivU" staff, modeChoice all zeros, Pittsburgh, PA
+# "R_3npBBdSv53BZ4zj" graduate student, modeChoice all zeros, Richmond, VA
+# "R_3iVYcw5gogpxDsm" staff, modeChoice all zeros, Worcester, MA
+# "R_2ydBN6LrpCfTK35" 65+ faculty, modeChoice all zeros, Arlington, NY
+
+```
+
+
+
+
+- Create new `modechoice` columns that count number of commuting days using different modes as "main mode"
+
+  - One last important step of cleaning the data is to identify "main mode" of subjects commuting trips. 
+  `commute_days` is the total commuting days that survey subjects reported they commute to campus in
+  a week. In many responses, this number doesn't equal the sum of all reported commuting days by different modes.
+  This is because we asked "how many days did you use each mode to commute to campus in the past week?"
+  It is common that multiple modes are involved in a day or in single commute trip, in which multiple small
+  trips are linked. “Main mode” of transportation is not considered using two modes if the subject links trips, 
+  i.e. walking to the train, and taking the train to campus. Therefore, we create a for loop keeping primary 
+  trips and cleaning secondary linked trips based on common rules in daily commutes.
+  For instance, walking and biking are most common modes for last-mile linking trips, while transit and 
+  driving are more likely to be main modes which people decide the entire itinerary based upon. In this
+  for loop, all 10 transportation modes placed in a hierarchy: *transit* is higher than *driving*, 
+  *driving* is higher than *carpool (driver & rider)*, *carpool* is higher than *vanpool*, *vanpool* is
+  higher than *rideshare*, *rideshare* is higher than *Penn transit*, *Penn transit* is higher than 
+  *walking*, *walking* is higher than *bicycle*, and *bicycle* is higher than *other mobility*. In 
+  each loop of a transport mode, we assign # days that is reported by the subjects using this mode 
+  to itself and subtracted the # days from the total commuting days (save in `commute_days_remain`), 
+  until the `commute_days_remain` becomes zero.  
+  
+
+
+- Create dummy variables for commuter profiles that will be used in later visualizations 
+
+  - `facultyDummy`: 1 means the subject is faculty, and 0 means other working status.
+  
+  - `staffDummy`: 1 means the subject is staff, and 0 means other working status.
+  
+  - `medSchoolDummy`: 1 means the subject is affiliated to medical school, and 0 means otherwise.
+  
+  - `driveAloneDummy`: 1 means the subject commute by driving alone (main modes) at least 3 days in a week, and 0 means otherwise.
+  
+  - `takeTransitDummy`: 1 means the subject commute by public transit (main modes) at least 3 days in a week, and 0 means otherwise.
+  
+  - `walkingDummy`: 1 means the subject commute by walking (main modes) at least 3 days in a week, and 0 means otherwise..
+  
+  - `bikingDummy`: 1 means the subject commute by biking (main modes) at least 3 days in a week, and 0 means otherwise.
+  
+  - `carpoolDummy`: 1 means the subject commute by carpool (main mode) as driver or rider at least one day in a week, and 0 means otherwise.
+  
+  
+```{r modechoice data, message=FALSE, warning=FALSE, include=TRUE, results='hide'}
+########
+# cleaning modechoice columns
+dat <- dat %>% st_drop_geometry() %>% 
+  mutate(total_trips = as.numeric(modeChoice_1)+as.numeric(modeChoice_2)+as.numeric(modeChoice_3)+
+                        as.numeric(modeChoice_4)+as.numeric(modeChoice_5)+as.numeric(modeChoice_6)+
+                        as.numeric(modeChoice_7)+as.numeric(modeChoice_8)+as.numeric(modeChoice_9)+
+                        as.numeric(modeChoice_10),
+          commute_days = as.numeric(commuteCampus_1)) %>%
+  mutate(commute_days = ifelse(is.na(commute_days), min(total_trips, 7), commute_days))
+
+
+# this is the hierarchy of primary trips: transit is higher than driving, driving is higher than carpool
+modeChoice_levels <- c("modeChoice_2", "modeChoice_1", 
+                       "modeChoice_5", "modeChoice_6", 
+                       "modeChoice_7", "modeChoice_9", 
+                       "modeChoice_8", "modeChoice_3", 
+                       "modeChoice_4", "modeChoice_10")
+
+
+modeChoice_levelsnew <- c("modeChoice_2new", "modeChoice_1new", 
+                       "modeChoice_5new", "modeChoice_6new", 
+                       "modeChoice_7new", "modeChoice_9new", 
+                       "modeChoice_8new", "modeChoice_3new", 
+                       "modeChoice_4new", "modeChoice_10new")
+
+
+# create a new row and init every entry to 0
+dat$modeChoice_1new = "0"
+dat$modeChoice_2new = "0"
+dat$modeChoice_3new = "0"
+dat$modeChoice_4new = "0"
+dat$modeChoice_5new = "0"
+dat$modeChoice_6new = "0"
+dat$modeChoice_7new = "0"
+dat$modeChoice_8new = "0"
+dat$modeChoice_9new = "0"
+dat$modeChoice_10new = "0"
+
+
+# for loop keeping primary trips and cleaning secondary trips based on total commuting days
+for (i in 1:nrow(dat)) {
+
+  # operate on each row
+  row <- dat[i,]
+  
+  # create a new var initially equal to the total commuting days
+  commute_days_remain <- row$commute_days
+
+  # in the embedded for loop, identify trips/days by each mode in the hierarchy in order
+  for(j in modeChoice_levels){
+
+      # calculate the remaining commute days after subtracting the number trips 
+      # repoted by tghe subject for the current mode 
+      commute_days_remain <- commute_days_remain - as.numeric(row[[j]])
+
+      j_index = which(modeChoice_levels == j)
+
+      # if still commuting days not identified with main modes
+      # keep running down the hierarchy - assign the next level to modeChoice
+      if (commute_days_remain >= 0){
+        row[[modeChoice_levelsnew[j_index]]] = row[[modeChoice_levels[j_index]]]
+      }else{
+        break
+      }
+      
+  }
+
+  # after identifying main modes of all commute days
+  # append the row with new variables back to dat
+  dat[i,] <- row
+  
+}
+
+
+
+# rename columns
+dat <- dat %>% 
+  rename("modeChoice_1old" = "modeChoice_1", "modeChoice_1" = "modeChoice_1new",
+          "modeChoice_2old" = "modeChoice_2", "modeChoice_2" = "modeChoice_2new",
+          "modeChoice_3old" = "modeChoice_3", "modeChoice_3" = "modeChoice_3new",
+          "modeChoice_4old" = "modeChoice_4", "modeChoice_4" = "modeChoice_4new",
+          "modeChoice_5old" = "modeChoice_5", "modeChoice_5" = "modeChoice_5new",
+          "modeChoice_6old" = "modeChoice_6", "modeChoice_6" = "modeChoice_6new",
+          "modeChoice_7old" = "modeChoice_7", "modeChoice_7" = "modeChoice_7new",
+          "modeChoice_8old" = "modeChoice_8", "modeChoice_8" = "modeChoice_8new",
+          "modeChoice_9old" = "modeChoice_9", "modeChoice_9" = "modeChoice_9new",
+          "modeChoice_10old" = "modeChoice_10", "modeChoice_10" = "modeChoice_10new",
+ 	      "total_trips_old" = "total_trips")
+
+# map to sf points using origin coordinates
+dat <- st_as_sf(dat, coords=c("originlon", "originlat"), crs=4326) %>% 
+  mutate(originlat = as.numeric(sub('.*"0":\\{"lat":(\\d+\\.\\d+),"lng":.*', '\\1', odtest)),
+         originlon = as.numeric(sub('.*"0":\\{"lat":\\d+\\.\\d+,"lng":(\\-\\d+\\.\\d+).*', '\\1', odtest)))
+
+#creating dummy variables for commuter profiles that will be used in later visualisations - we don't want to consider the rows for 
+dat <- dat %>% 
+  mutate(
+    medSchoolDummy = ifelse(schoolDivision == "Perelman School of Medicine", 1, 0),
+    driveAloneDummy = ifelse(as.numeric(modeChoice_1) >= 3, 1, 0),
+    takeTransitDummy = ifelse(as.numeric(modeChoice_2) >= 3, 1, 0),
+    walkingDummy = ifelse(as.numeric(modeChoice_3) >= 3, 1, 0),
+    bikingDummy = ifelse(as.numeric(modeChoice_4) >= 3, 1, 0),
+    facultyDummy = ifelse(workStatus == "Faculty", 1, 0),
+    staffDummy = ifelse(workStatus == "Staff", 1, 0),
+    carpoolDummy = ifelse(as.numeric(modeChoice_5) > 0 | as.numeric(modeChoice_6) > 0, 1, 0)
+  )
+
+# create a binary variable for the environmental impact question 1.
+envImpact_1_dummy_order <- c("Disagree or Nuetral", "Agree")
+dat <- dat %>% mutate(envImpact_1_dummy = ifelse(envImpact_1 %in% c("Agree", "Strongly Agree"), 
+                                                 "Agree", "Disagree or Nuetral"))
+
+```
+
+We also read in spatial datasets, including Philadelphia City boundary and zip code 
+geographies, to assist analyses and visualizations.
+
+```{r read loc data, message=FALSE, warning=FALSE, include=TRUE, results='hide'}
+# Import spatial data sets
+# please change the file path to read city limits data 
+city <- st_read("C:/Users/siyuw/Documents/FRES_Survey/Dataset/City_Limits.geojson") %>%
+        st_as_sf(crs = 2272)
+
+# cityzip <- st_read("C:/Users/siyuw/Documents/FRES_Survey/Dataset/Zipcodes_Poly.geojson") %>%
+#         st_as_sf(crs = 2272)
+
+zctas <- tigris::zctas(cb = TRUE, class = "sf", refresh = TRUE, year=2020) %>% 
+  st_transform(crs=4326)
+
+```
+
+**See detailed data dictionary in the Appendix**
+
+
+## 4. How Penn Employees Get To and From Work
+
+### 4.1. Penn employees use sustainable transit far more than average commuters
+
+One of the most important question we want to understand using the travel survey data 
+is whether and how do Penn employees commute by different means than others in Philadelphia area. 
+To calculate employee transportation mode share choice, we weighted subjects' mode choices
+by the percentage of each mode used by each person in a week: e.g., a person who 
+drives 2 days and rides transit 2 days per week is counted as 0.5 for driving alone 
+and 0.5 for taking transit. We then collected mode share of commuters in Philadelphia 
+County and Philadelphia region (Metropolitan Statistical Area, known as MSA) from 
+2017-21 American Community Survey 5-Year Estimates.
+
+As the tables below show, transit, driving alone, and walking were the 
+most popular ways to get to work at Penn, in that order. The percentage of frequent 
+transit users (32.1%) at Penn substantially outnumbers the transit mode share in 
+the City/County (24.0%) and Philadelphia region (6.4%).
+
+
+```{r penn mode share, warning = FALSE, message = FALSE, fig.width=10, fig.height=4}
+
+# 1. drive alone, 2. public transit, 3. walking, 4. bicycle, 
+# 5. carpool (driver), 6. carpool (rider), 7. vanpool 8. Penn Transit, 
+# 9. rideshare, 10. other mobility device (hoverboard, scooter)
+
+dat %>% st_drop_geometry() %>%
+  select(starts_with("modeChoice"), -ends_with("Old"), Status, commute_days) %>%
+  mutate(#total_days = sum(),
+            weight_drive = ifelse(commute_days != 0, as.numeric(modeChoice_1)/commute_days, 0),
+            weight_transit = ifelse(commute_days != 0, as.numeric(modeChoice_2)/commute_days, 0),
+            weight_walk = ifelse(commute_days != 0, as.numeric(modeChoice_3)/commute_days, 0),
+            weight_bicycle = ifelse(commute_days != 0, as.numeric(modeChoice_4)/commute_days, 0),
+            weight_carpooldriver = ifelse(commute_days != 0, as.numeric(modeChoice_5)/commute_days, 0),
+            weight_carpoolrider = ifelse(commute_days != 0, as.numeric(modeChoice_6)/commute_days, 0),
+            weight_vanpool = ifelse(commute_days != 0, as.numeric(modeChoice_7)/commute_days, 0),
+            weight_penntransit = ifelse(commute_days != 0, as.numeric(modeChoice_8)/commute_days, 0),
+            weight_rideshare = ifelse(commute_days != 0, as.numeric(modeChoice_9)/commute_days, 0),
+            weight_other = ifelse(commute_days != 0, as.numeric(modeChoice_10)/commute_days, 0),
+            
+            WFH = ifelse(commute_days == 0, 1, 0)) %>%
+  group_by(Status) %>% 
+  summarise(total_days = sum(commute_days),
+            total_people = n(),
+            
+            total_drive = sum(weight_drive),
+            total_transit = sum(weight_transit),
+            total_walk = sum(weight_walk),
+            total_bicycle = sum(weight_bicycle),
+            total_carpooldriver = sum(weight_carpooldriver),
+            total_carpoolrider = sum(weight_carpoolrider),
+            total_vanpool = sum(weight_vanpool),
+            total_penntransit = sum(weight_penntransit),
+            total_rideshare = sum(weight_rideshare),
+            total_other = sum(weight_other),
+            total_WFH = sum(WFH),
+            
+            pct_WFH = total_WFH/total_people*100,
+            
+            pct_drive = total_drive/(total_people - total_WFH)*100,
+            pct_transit = total_transit/(total_people - total_WFH)*100,
+            pct_walk = total_walk/(total_people - total_WFH)*100,
+            pct_bicycle = total_bicycle/(total_people - total_WFH)*100,
+            pct_carpooldriver = total_carpooldriver/(total_people - total_WFH)*100,
+            pct_carpoolrider = total_carpoolrider/(total_people - total_WFH)*100,
+            pct_vanpool = total_vanpool/(total_people - total_WFH)*100,
+            pct_penntransit = total_penntransit/(total_people - total_WFH)*100,
+            pct_rideshare = total_rideshare/(total_people - total_WFH)*100,
+            pct_other = total_other/(total_people - total_WFH)*100,
+
+            ) %>%
+  #filter(total_days > 20) %>%
+  select(pct_drive, pct_transit, pct_walk,  pct_bicycle) %>%
+  mutate(pct_allother = 100-pct_drive-pct_transit-pct_walk-pct_bicycle) %>%
+  rename("% Workers driving" = pct_drive, "% Workers riding transit" = pct_transit,
+         "% Workers walking" = pct_walk, "% Workers riding bike" = pct_bicycle,
+         "% Workers using other mobility" = pct_allother) %>% 
+  gather() %>%
+  rename("Means of Transportation" = key, 
+       "Mode share (%)" = value) %>%
+  kable(., "html", digits=1, align = "lccrr",
+        caption = "Penn Employees' Means of Transportation to Work, Source: Penn Commuter Travel Survey 2023") %>%
+  kable_styling()
+
+
+```
+
+
+
+
+```{r census mode data, warning = FALSE, message = FALSE, results=FALSE}
+
+acs_variable_list.2021 <- load_variables(2021, #year
+                                         "acs5", #five year ACS estimates
+                                         cache = TRUE)
+
+# get the shape of Philadelphia-Camden-Wilmington, PA-NJ-DE-MD Metro Area
+phillyMSA <- get_estimates(geography = "metropolitan statistical area/micropolitan statistical area",
+              product = "population",
+              year = 2019,
+              #state = NULL,
+              output = "wide",
+              geometry = TRUE,
+              ) %>%
+  st_as_sf(crs = 2272) %>% 
+  subset(., GEOID %in% "37980")
+
+# Burlington County, NJ; Camden County, NJ; Gloucester County, NJ
+# Bucks County, PA; Chester County, PA; Montgomery County, PA
+# Delaware County, PA; Philadelphia County, PA
+# New Castle County; DE, Cecil County, MD; Salem County, NJ
+
+state_fips = c(10, 24, 34, 42)
+phillyMSACounties <- get_acs(geography = "tract", 
+                            state= 42,#
+                            year = 2021,
+                            variables = c('B08006_001', 'B08006_002', 'B08006_003', 'B08006_008', 'B08006_014',
+                                         'B08006_015', 'B08006_016', 'B08006_017'),
+                            survey = "acs5",
+                            output = "wide",
+                            geometry = TRUE) %>%
+  dplyr::rename(TotalWorkers = B08006_001E,
+                 TotalWorkers_Car = B08006_002E,
+                 TotalWorkers_CarAlone = B08006_003E,
+                 TotalWorkers_Transit = B08006_008E,
+                 TotalWorkers_Bicycle = B08006_014E,
+                 TotalWorkers_Walk = B08006_015E,
+                 TotalWorkers_Other = B08006_016E,
+                 TotalWorkers_Home = B08006_017E) %>%
+  mutate(COUNTY.GEOID = str_sub(GEOID, 1, 5)) %>%
+  st_as_sf(crs = 2272) %>% 
+  dplyr::select(-starts_with("B")) %>% 
+  group_by(., COUNTY.GEOID) %>%
+  summarise(TotalWorkers = sum(TotalWorkers),
+            TotalWorkers_Car = sum(TotalWorkers_Car),
+            pctWorkers_Car = TotalWorkers_Car/TotalWorkers *100,
+            TotalWorkers_CarAlone = sum(TotalWorkers_CarAlone),
+            pctWorkers_CarAlone = TotalWorkers_CarAlone/TotalWorkers *100,
+            TotalWorkers_Transit = sum(TotalWorkers_Transit),
+            pctWorkers_Transit = TotalWorkers_Transit/TotalWorkers *100,
+            TotalWorkers_Bicycle = sum(TotalWorkers_Bicycle),
+            pctlWorkers_Bicycle = TotalWorkers_Bicycle/TotalWorkers *100,
+            TotalWorkers_Walk = sum(TotalWorkers_Walk),
+            pctWorkers_Walk = TotalWorkers_Walk/TotalWorkers *100,
+            TotalWorkers_Other = sum(TotalWorkers_Other),
+            pctWorkers_Other = TotalWorkers_Other/TotalWorkers *100,
+            TotalWorkers_Home = sum(TotalWorkers_Home),
+            pctWorkers_Home = TotalWorkers_Home/TotalWorkers *100,
+            Name = first(NAME),
+            Year = 2021) %>%
+  st_intersection(., phillyMSA) %>%
+  rbind(., 
+        get_acs(geography = "tract", 
+                state= 34,#
+                year = 2021,
+                variables = c('B08006_001', 'B08006_002', 'B08006_003', 'B08006_008', 'B08006_014',  
+                              #B08006_002 is all driving, B08006_003 is driving alone
+                             'B08006_015', 'B08006_016', 'B08006_017'),
+                survey = "acs5",
+                output = "wide",
+                geometry = TRUE) %>%
+        dplyr::rename(TotalWorkers = B08006_001E,
+                      TotalWorkers_Car = B08006_002E,
+                       TotalWorkers_CarAlone = B08006_003E,
+                       TotalWorkers_Transit = B08006_008E,
+                       TotalWorkers_Bicycle = B08006_014E,
+                       TotalWorkers_Walk = B08006_015E,
+                       TotalWorkers_Other = B08006_016E,
+                       TotalWorkers_Home = B08006_017E) %>%
+        mutate(COUNTY.GEOID = str_sub(GEOID, 1, 5)) %>%
+        st_as_sf(crs = 2272) %>% 
+        dplyr::select(-starts_with("B")) %>% 
+        group_by(., COUNTY.GEOID) %>%
+        summarise(TotalWorkers = sum(TotalWorkers),
+                  TotalWorkers_Car = sum(TotalWorkers_Car),
+                  pctWorkers_Car = TotalWorkers_Car/TotalWorkers *100,
+                  TotalWorkers_CarAlone = sum(TotalWorkers_CarAlone),
+                  pctWorkers_CarAlone = TotalWorkers_CarAlone/TotalWorkers *100,
+                  TotalWorkers_Transit = sum(TotalWorkers_Transit),
+                  pctWorkers_Transit = TotalWorkers_Transit/TotalWorkers *100,
+                  TotalWorkers_Bicycle = sum(TotalWorkers_Bicycle),
+                  pctlWorkers_Bicycle = TotalWorkers_Bicycle/TotalWorkers *100,
+                  TotalWorkers_Walk = sum(TotalWorkers_Walk),
+                  pctWorkers_Walk = TotalWorkers_Walk/TotalWorkers *100,
+                  TotalWorkers_Other = sum(TotalWorkers_Other),
+                  pctWorkers_Other = TotalWorkers_Other/TotalWorkers *100,
+                  TotalWorkers_Home = sum(TotalWorkers_Home),
+                  pctWorkers_Home = TotalWorkers_Home/TotalWorkers *100,
+                  Name = first(NAME),
+                  Year = 2021) %>%
+        st_intersection(., phillyMSA)) %>%
+  rbind(., 
+        get_acs(geography = "tract", 
+                state= 10,#
+                year = 2021,
+                variables = c('B08006_001', 'B08006_002', 'B08006_003', 'B08006_008', 'B08006_014',
+                             'B08006_015', 'B08006_016', 'B08006_017'),
+                survey = "acs5",
+                output = "wide",
+                geometry = TRUE) %>%
+        dplyr::rename(TotalWorkers = B08006_001E,
+                       TotalWorkers_Car = B08006_002E,
+                       TotalWorkers_CarAlone = B08006_003E,
+                       TotalWorkers_Transit = B08006_008E,
+                       TotalWorkers_Bicycle = B08006_014E,
+                       TotalWorkers_Walk = B08006_015E,
+                       TotalWorkers_Other = B08006_016E,
+                       TotalWorkers_Home = B08006_017E) %>%
+        mutate(COUNTY.GEOID = str_sub(GEOID, 1, 5)) %>%
+        st_as_sf(crs = 2272) %>% 
+        dplyr::select(-starts_with("B")) %>% 
+        group_by(., COUNTY.GEOID) %>%
+        summarise(TotalWorkers = sum(TotalWorkers),
+                  TotalWorkers_Car = sum(TotalWorkers_Car),
+                  pctWorkers_Car = TotalWorkers_Car/TotalWorkers *100,
+                  TotalWorkers_CarAlone = sum(TotalWorkers_CarAlone),
+                  pctWorkers_CarAlone = TotalWorkers_CarAlone/TotalWorkers *100,
+                  TotalWorkers_Transit = sum(TotalWorkers_Transit),
+                  pctWorkers_Transit = TotalWorkers_Transit/TotalWorkers *100,
+                  TotalWorkers_Bicycle = sum(TotalWorkers_Bicycle),
+                  pctlWorkers_Bicycle = TotalWorkers_Bicycle/TotalWorkers *100,
+                  TotalWorkers_Walk = sum(TotalWorkers_Walk),
+                  pctWorkers_Walk = TotalWorkers_Walk/TotalWorkers *100,
+                  TotalWorkers_Other = sum(TotalWorkers_Other),
+                  pctWorkers_Other = TotalWorkers_Other/TotalWorkers *100,
+                  TotalWorkers_Home = sum(TotalWorkers_Home),
+                  pctWorkers_Home = TotalWorkers_Home/TotalWorkers *100,
+                  Name = first(NAME),
+                  Year = 2021) %>%
+        st_intersection(., phillyMSA)) %>%
+  rbind(., 
+        get_acs(geography = "tract", 
+                state= 24,#
+                year = 2021,
+                variables = c('B08006_001', 'B08006_002', 'B08006_003', 'B08006_008', 'B08006_014',
+                             'B08006_015', 'B08006_016', 'B08006_017'),
+                survey = "acs5",
+                output = "wide",
+                geometry = TRUE) %>%
+        dplyr::rename(TotalWorkers = B08006_001E,
+                       TotalWorkers_Car = B08006_002E,
+                       TotalWorkers_CarAlone = B08006_003E,
+                       TotalWorkers_Transit = B08006_008E,
+                       TotalWorkers_Bicycle = B08006_014E,
+                       TotalWorkers_Walk = B08006_015E,
+                       TotalWorkers_Other = B08006_016E,
+                       TotalWorkers_Home = B08006_017E) %>%
+        mutate(COUNTY.GEOID = str_sub(GEOID, 1, 5)) %>%
+        st_as_sf(crs = 2272) %>% 
+        dplyr::select(-starts_with("B")) %>% 
+        group_by(., COUNTY.GEOID) %>%
+        summarise(TotalWorkers = sum(TotalWorkers),
+                  TotalWorkers_Car = sum(TotalWorkers_Car),
+                  pctWorkers_Car = TotalWorkers_Car/TotalWorkers *100,
+                  TotalWorkers_CarAlone = sum(TotalWorkers_CarAlone),
+                  pctWorkers_CarAlone = TotalWorkers_CarAlone/TotalWorkers *100,
+                  TotalWorkers_Transit = sum(TotalWorkers_Transit),
+                  pctWorkers_Transit = TotalWorkers_Transit/TotalWorkers *100,
+                  TotalWorkers_Bicycle = sum(TotalWorkers_Bicycle),
+                  pctlWorkers_Bicycle = TotalWorkers_Bicycle/TotalWorkers *100,
+                  TotalWorkers_Walk = sum(TotalWorkers_Walk),
+                  pctWorkers_Walk = TotalWorkers_Walk/TotalWorkers *100,
+                  TotalWorkers_Other = sum(TotalWorkers_Other),
+                  pctWorkers_Other = TotalWorkers_Other/TotalWorkers *100,
+                  TotalWorkers_Home = sum(TotalWorkers_Home),
+                  pctWorkers_Home = TotalWorkers_Home/TotalWorkers *100,
+                  Name = first(NAME),
+                  Year = 2021) %>%
+        st_intersection(., phillyMSA))
+```
+
+
+```{r census mode share, warning = FALSE, message = FALSE, results=TRUE}
+phillyMSACounties %>% st_drop_geometry() %>% group_by(., as.character(Year)) %>%
+        summarise(TotalWorkers = sum(TotalWorkers) - sum(TotalWorkers_Home),
+                  #pctWorkers_Car =  sum(TotalWorkers_Car)/TotalWorkers *100,
+                  pctWorkers_CarAlone =  sum(TotalWorkers_CarAlone)/TotalWorkers *100,
+                  pctWorkers_Transit = sum(TotalWorkers_Transit)/TotalWorkers *100,
+                  pctlWorkers_Bicycle = sum(TotalWorkers_Bicycle)/TotalWorkers *100,
+                  pctWorkers_Walk = sum(TotalWorkers_Walk)/TotalWorkers *100,
+                  pctWorkers_Other = sum(TotalWorkers_Other)/TotalWorkers *100) %>%
+  select(starts_with("pct")) %>%
+  rename("% Workers driving" = pctWorkers_CarAlone, "% Workers riding transit" = pctWorkers_Transit,
+         "% Workers walking" = pctWorkers_Walk, "% Workers riding bike" = pctlWorkers_Bicycle,
+         "% Workers using other mobility" = pctWorkers_Other) %>% 
+  gather() %>% 
+  rename("Means of Transportation" = key, 
+         "Mode share (%)" = value) %>%
+  kable(., "html", digits=1, align = "lccrr",
+        caption = "Means of Transportation to Work in Philadelphia Region, Source: ACS 2017-21") %>%
+  kable_styling()
+
+
+phillyMSACounties %>% st_drop_geometry() %>%
+  filter(., Name == "Census Tract 66, Philadelphia County, Pennsylvania") %>%
+  mutate(TotalWorkers = sum(TotalWorkers) - sum(TotalWorkers_Home),
+          #pctWorkers_Car =  sum(TotalWorkers_Car)/TotalWorkers *100,
+          pctWorkers_CarAlone =  sum(TotalWorkers_CarAlone)/TotalWorkers *100,
+          pctWorkers_Transit = sum(TotalWorkers_Transit)/TotalWorkers *100,
+          pctlWorkers_Bicycle = sum(TotalWorkers_Bicycle)/TotalWorkers *100,
+          pctWorkers_Walk = sum(TotalWorkers_Walk)/TotalWorkers *100,
+          pctWorkers_Other = sum(TotalWorkers_Other)/TotalWorkers *100) %>%
+  select(starts_with("pct"), -pctWorkers_Car, -pctWorkers_Home) %>%
+  rename("% Workers driving" = pctWorkers_CarAlone, "% Workers riding transit" = pctWorkers_Transit,
+         "% Workers walking" = pctWorkers_Walk, "% Workers riding bike" = pctlWorkers_Bicycle,
+         "% Workers using other mobility" = pctWorkers_Other) %>% 
+  gather() %>% 
+  rename("Means of Transportation" = key, 
+         "Mode share (%)" = value) %>%
+  kable(., "html", digits=1, align = "lccrr",
+        caption = "Means of Transportation to Work in Philadelphia County, Source: ACS 2017-21") %>%
+  kable_styling()
+
+
+
+```
+
+We were also interested in individuals' use of each mode or mixed modes in a week. 
+The following tables and plots highlight the two most popular commuting modes: public 
+transit and driving. Of the 4,111 valid travel survey responses, 2,143 (52.1%) respondents 
+said that they take public transit at least once a week, and 1321 (32.1%) reported 
+that they take transit three or more days in a week. Only 19.4% of subjects reported 
+driving alone to work 3+ days in a week.
+
+
+```{r transit plots, warning = FALSE, message = FALSE, fig.width=6, fig.height=2.5, fig.align='center'}
+
+calculate_share(dat, "modeChoice_2") %>% 
+  select(modeChoice_2, count, share) %>% 
+  filter(share != "") %>% 
+  st_drop_geometry() %>% 
+  arrange(-share) %>% 
+  rename("Number of days respondent takes transit" = modeChoice_2, 
+         Count = count, "Share (%)" = share)%>%
+  kable(., "html", digits=1, align = "lccrr") %>%
+  kable_styling()
+
+
+dat %>% #filter(modeChoice_2 != 0) %>% 
+  calculate_share("takeTransitDummy") %>% 
+  st_drop_geometry() %>% 
+  rename("Does respondent take transit 3 or more days per week" = takeTransitDummy, 
+         Count = count, "Share (%)" = share) %>% 
+  kable(., "html", digits=1, align = "lccrr") %>%
+  kable_styling()
+
+
+ggplot(dat %>% #filter(modeChoice_2 != 0) %>% 
+         calculate_share( "takeTransitDummy"),
+  aes(x=as.factor(takeTransitDummy), y=share))+
+  geom_bar(stat='identity', position = 'dodge', fill = '#FE7822')+  
+  geom_text(aes(label=round(share, digits=1)), 
+            position=position_dodge(width=0.9), hjust =-0.1, size=5) + 
+  labs(x = " ",
+       y="\n% share",
+       title="Does respondent take transit 3 or more days in a week? \n",
+       subtitle=paste("Total responses = ", 
+                      dat %>% 
+                        #filter(modeChoice_2 != 0) %>% 
+                        tally())) +
+   scale_x_discrete(breaks=c(0, 1),
+                    labels=c("No","Yes")) +
+   plotTheme12ptY +
+   coord_flip()
+
+ggplot(dat %>% #filter(modeChoice_1 != 0) %>% 
+         calculate_share( "driveAloneDummy"),
+  aes(x=as.factor(driveAloneDummy), y=share))+
+  geom_bar(stat='identity', position = 'dodge', fill = '#FE7822')+  ##1c9099
+  geom_text(aes(label=round(share, digits=1)), 
+            position=position_dodge(width=0.9), hjust =-0.1, size=5) + 
+  labs(x = " ",
+       y="\n% share",
+       title="Does respondent drive alone 3 or more days in a week? \n",
+       subtitle=paste("Total responses = ", 
+                      dat %>% 
+                        #filter(modeChoice_1 != 0) %>% 
+                        tally())) +
+   scale_x_discrete(breaks=c(0, 1),
+                    labels=c("No","Yes")) +
+   plotTheme12ptY +
+   coord_flip()
+
+```
+
+
+</br>
+
+
+### 4.2. Many commuters use a mix of transportation modes throughout the week
+
+Approximately 21.5% of people who visit campus more than once per week use 2 or 
+more different “main” modes of transportation in a week^[This figure corresponds 
+to the “main mode” of transportation - it is not considered using two modes if 
+you link trips, i.e. walking to the train, and taking the train to campus.], and 
+the remainder use only one mode. A small minority of subjects report taking 3 or 
+more modes - implying some ad-hoc commuting approaches.
+
+```{r mixed modes plots, warning = FALSE, message = FALSE, fig.width=6, fig.height=2.5, fig.align='center'}
+dat <- dat %>% 
+  # mutate(num_mode = 10 - rowSums(across(`modeChoice_1old`:`modeChoice_10old`) == "0")) # this line uses the mode choice variables that include linked trips
+  mutate(num_mode = 10 - rowSums(across(`modeChoice_1`:`modeChoice_10`) == "0")) # this line uses the mode choice variables that only consider "main transportation"s
+
+
+calculate_share(subset(dat, commute_days > 0 & num_mode > 0), "num_mode") %>% 
+  as.data.frame() %>%
+  ggplot() +
+  geom_bar( aes(x=num_mode, y=share), stat='identity',fill = '#FE6822')+   
+  geom_text(aes(x=num_mode, y=share, label=round(share, digits=1)),
+            position=position_dodge(width=0.9), hjust =0.1, size=5) +
+  labs(# title = "How many modes do you use to commute to campus in a week",
+       subtitle = paste("Subjects commuting at least one day, n = ", 
+                        dat %>% 
+                          filter(commute_days >= 1 & num_mode > 0) %>% 
+                          tally()),
+      x="# commuting modes",
+      y="Percentage share (%)")+
+  plotTheme12ptY+
+  coord_flip()
+
+```
+
+</br>
+
+### 4.3. Schedules - everyday commuting is not the norm, but most arrive at peak hours
+
+Everyday commuters are the plurality, not the majority. The most commuting frequencies 
+are five days per week (31.3%), three days per week (24.7%), and four days per week 
+(18.9%). Staff are the most likely to be 3-day commuters. 
+
+
+```{r campus days plots, warning = FALSE, message = FALSE, fig.width=12, fig.height=4}
+ggplot(calculate_share(dat %>% filter(commuteCampus_1 != ""),"commuteCampus_1"),
+  aes(x=commuteCampus_1, y=share))+
+  geom_bar(stat='identity',fill = '#FE6822')+   #'#1c9099'
+  geom_text(aes(label=round(share, digits=1)), 
+            position=position_dodge(width=0.9), hjust =-0.1, size=5) + 
+  labs(title = "How many days do you commute to campus?",
+       x="Days per week",
+       y="Percentage share (%)")+
+  plotTheme12ptY+
+  coord_flip()
+
+
+ggplot(calculate_share(dat %>% filter(., commuteCampus_1 != "" & workStatus != ""), "commuteCampus_1", "workStatus"),
+  aes(x=commuteCampus_1, y=share))+
+  geom_bar(stat='identity',fill = '#FE6822')+
+  geom_text(aes(label=round(share, digits=1)), 
+            position=position_dodge(width=0.9), hjust =0.5, size=4) + 
+  facet_wrap(~workStatus)+
+  labs(title = "Days commuting to campus by work status",
+       x="Days per week",
+       y="\nPercentage share (%)",
+       subtitle=paste("Total responses = ", dat %>% 
+         filter(commuteCampus_1 != "" & workStatus != "") %>% 
+         tally()))+
+  plotTheme12ptY+
+  coord_flip()
+
+
+```
+
+However, a peak hour commute is still the norm. Over 78% of subjects report arriving 
+on campus between 6 AM and 10 AM, and the peak of arrival is between 8 AM to 10 AM 
+when about 62% arrive on campus. 
+
+```{r arrival time plots, warning = FALSE, message = FALSE, fig.width=12, fig.height=4}
+# set up time label order
+level_order <- c("Prior to 6AM", "6:00-8:00 AM", "8:00-10:00 AM",   
+                 "10:00-12:00 PM", "12:00 - 2:00 PM", "2:00 - 4:00 PM", 
+                 "4:00 - 6:00 PM", "6:00 PM or later", "I have no set arrival time") 
+
+ggplot(calculate_share(dat %>% filter(arrivalTime != ""),"arrivalTime"), 
+                       aes(x=factor(arrivalTime, level = level_order), 
+                           y=share))+
+  geom_bar(stat='identity',fill = '#FE6822')+   #'#1c9099'
+  geom_text(aes(label=round(share, digits=1)), 
+            position=position_dodge(width=0.9), hjust =-0.1, size=5) + 
+  labs(title = "When do you arrive on campus?",
+       x="Arrival time",
+       y="Percentage share (%)")+
+  plotTheme12ptY+
+  coord_flip()
+```
+
+</br>
+
+### 4.4. Travel trends don’t vary by school or unit
+
+Average employee behavior didn’t vary much between schools, and school affiliation 
+was not a significant factor in modeling employee commuting choices. Other factors, 
+such as schedule, frequency of commute, and geography, tended to be associated with 
+employee travel choices. 
+
+
+```{r arrival time by school, warning = FALSE, message = FALSE, fig.width=12, fig.height=10}
+#cross analysis school division
+ggplot(data=dat)+ 
+  geom_bar(aes(y = arrivalTime), fill = '#FE6822')+
+  xlab("Count")+
+  ylab("Arrival time")+
+  labs(title = "Distribution of arrival time across school divisions")+
+  facet_wrap(~schoolDivision) +
+  plotTheme12ptY
+
+
+ggplot(data=dat)+ 
+  geom_bar(aes(y = as.numeric(commuteCampus_1)), fill = '#FE6822')+
+  xlab("Count")+
+  ylab("# commuting days")+
+  labs(title = "Distribution of commuting days in a week across school divisions")+
+  facet_wrap(~schoolDivision) +
+  plotTheme12ptY
+
+```
+
+Additionally, it is notable that Perelman School of Medicine employees 
+(the most numerous employee group) are more likely to work on-site every day.
+
+
+```{r arrival time med school, warning = FALSE, message = FALSE, fig.width=6, fig.height=2.5, fig.align='center'}
+dat %>% mutate(medSchoolDummy = ifelse(medSchoolDummy == 1, "Medical school", "Other schools")) %>%
+  ggplot(.)+ 
+  geom_bar(aes(y = arrivalTime), fill = '#FE6822')+
+  xlab("Count")+
+  ylab("Arrival time")+
+  labs(title = "Distribution of arrival time: medical school vs. Others")+
+  facet_wrap(~medSchoolDummy) +
+  plotTheme12ptY
+
+
+dat %>% mutate(medSchoolDummy = ifelse(medSchoolDummy == 1, "Medical school", "Other schools")) %>%
+  ggplot(.)+ 
+  geom_bar(aes(y = as.numeric(commuteCampus_1)), fill = '#FE6822')+
+  xlab("Count")+
+  ylab("# commuting days")+
+  labs(title = "Distribution of commuting days in a week: medical school vs. others")+
+  facet_wrap(~medSchoolDummy) +
+  plotTheme12ptY
+
+```
+
+</br>
+
+### 4.5. The geography of commuting at Penn
+
+In the survey, we collected subjects' approximate commuting origin and destination
+locations. Using the latitude and longitude pairs, we plotted commuters' trip origins 
+on the map.
+
+
+```{r trip origin maps, warning = FALSE, message = FALSE, fig.align='center', fig.width=14, fig.height=11}
+dat_zc <- st_join(dat, zctas, join=st_within) %>%
+  select(-ZCTA5CE20, -AFFGEOID20, -NAME20, -LSAD20, -ALAND20, -AWATER20) %>% 
+  rename(zipCode = GEOID20)
+
+
+dat_zc_mode <- dat_zc %>% #st_drop_geometry() %>%
+  select(starts_with("modeChoice"), zipCode, commute_days, starts_with("duration")) %>%
+  group_by(zipCode) %>% 
+  summarise(#total_days = sum(),
+            total_drive = sum(as.numeric(modeChoice_1)),
+            total_transit = sum(as.numeric(modeChoice_2)),
+            total_walk = sum(as.numeric(modeChoice_3)),
+            total_bicycle = sum(as.numeric(modeChoice_4)),
+            total_carpooldriver = sum(as.numeric(modeChoice_5)),
+            total_carpoolrider = sum(as.numeric(modeChoice_6)),
+            total_vanpool = sum(as.numeric(modeChoice_7)),
+            total_penntransit = sum(as.numeric(modeChoice_8)),
+            total_rideshare = sum(as.numeric(modeChoice_9)),
+            total_other = sum(as.numeric(modeChoice_10)),
+            total_days = sum(commute_days),
+            total_people = n(),
+            
+            pct_drive = ifelse(total_days != 0, total_drive/total_days*100, 0),
+            pct_transit = ifelse(total_days != 0, total_transit/total_days*100, 0),
+            pct_walk = ifelse(total_days != 0, total_walk/total_days*100, 0),
+            pct_bicycle = ifelse(total_days != 0, total_bicycle/total_days*100, 0),
+            pct_carpooldriver = ifelse(total_days != 0, total_carpooldriver/total_days*100, 0),
+            pct_carpoolrider = ifelse(total_days != 0, total_carpoolrider/total_days*100, 0),
+            pct_vanpool = ifelse(total_days != 0, total_vanpool/total_days*100, 0),
+            pct_penntransit = ifelse(total_days != 0, total_penntransit/total_days*100, 0),
+            pct_rideshare = ifelse(total_days != 0, total_rideshare/total_days*100, 0),
+            pct_other = ifelse(total_days != 0, total_other/total_days*100, 0),
+            avg_days = total_days/total_people,
+            
+            avg_duration_driving = mean(duration_driving, na.rm = TRUE),
+            avg_duration_transit = mean(duration_transit, na.rm = TRUE), 
+            avg_duration_walking = mean(duration_walking, na.rm = TRUE) 
+            ) %>%
+  st_drop_geometry() %>% 
+  left_join(zctas, by=c("zipCode"="GEOID20")) %>% 
+  st_as_sf() %>% 
+  select(-ZCTA5CE20, -AFFGEOID20, -NAME20, -LSAD20, -ALAND20, -AWATER20)
+
+dat_zc_sum <- st_join(dat, zctas, join=st_within) %>%
+  select(-ZCTA5CE20, -AFFGEOID20, -NAME20, -LSAD20, -ALAND20, -AWATER20) %>% 
+  rename(zipCode = GEOID20) %>% 
+  group_by(zipCode) %>% #tally() %>% 
+  summarise(num_trips_origin = n(),
+         num_trips_transit = sum(takeTransitDummy)) %>% 
+  mutate(pct_transit = num_trips_transit/num_trips_origin * 100) %>%
+  st_drop_geometry() %>% 
+  left_join(zctas, by=c("zipCode"="GEOID20")) %>% 
+  st_as_sf() %>% 
+  select(-ZCTA5CE20, -AFFGEOID20, -NAME20, -LSAD20, -ALAND20, -AWATER20)
+
+
+# #create the function for mapping
+# ll <- function(dat, proj4 = 4326)
+#   {st_transform(dat, proj4)}
+# 
+# #get a basemap
+# base_map <- get_map(location = unname(st_bbox(ll(dat))),
+#                     maptype = "toner-lite") #maptype = "terrain-background"
+# base_map_phillyMSA <- get_map(location = unname(st_bbox(ll(phillyMSA))),
+#                     maptype = "toner-lite") #maptype = "terrain-background"
+# base_map_penn <- get_map(location = unname(st_bbox(ll(city))),
+#                     maptype = "toner-lite") #maptype = "terrain-background"
+
+
+#Map total subjects living in each Zipcode onto the base map
+pal <- leaflet::colorNumeric(viridis::viridis_pal(option = "F", direction = -1, 
+                                        begin = 0, end = 1)(5), domain = dat_zc_mode$total_people)
+
+dat_zc_mode %>% 
+  mutate(label = paste0("<b>", zipCode, ":</b> ", total_people)) %>%
+  leaflet(.) %>% 
+  addProviderTiles(providers$CartoDB.Positron) %>% 
+  addPolygons(
+    color = "transparent", weight = 0.1, opacity = 1,
+    fillColor = ~pal(total_people), fillOpacity = 0.7,
+    label = ~lapply(label, HTML),
+    labelOptions = labelOptions(direction = "top"),
+    highlight = highlightOptions(
+      color = "#FFF", bringToFront = TRUE
+    )
+  ) %>%
+  addLegend(
+    values = ~total_people, opacity = 0.7,
+    pal = pal,
+    title = "# surveyed Penn employees living here \n(n=4111)", 
+    position = "topleft"
+  )
+
+```
+
+Survey subjects live throughout the Philadelphia region but are most densely clustered 
+in areas near the University and in the suburban areas of Montgomery and Delaware 
+counties close to the Philadelphia border. A small number of subjects 
+report living in other regions - New York, Central Pennsylvania, Washington, D.C., 
+or elsewhere - and visiting campus relatively infrequently. 
+
+
+Access to Penn is uneven. Using subject locations and Google travel itineraries, 
+we analyzed regional access to Penn employee destinations. In some zip codes, average 
+transit times are as much as 5 times longer than drive times. In other places, multiple 
+modes are viable. While some lifestyle and economic factors affect 
+commuter behavior, location is the strongest predictor of mode choice (See 
+Sustainability Implications of Travel Behavior for more). 
+
+```{r trip duration, warning = FALSE, message = FALSE, fig.width=14, fig.height=11}
+
+dat_zc_duration <- dat_zc %>% #st_drop_geometry() %>%
+  select(matches("duration"), zipCode, commute_days) %>%
+  group_by(zipCode) %>% 
+  summarise(#total_days = sum(),
+            avg_duration_driving = mean(duration_driving, na.rm = TRUE),
+            avg_duration_transit = mean(duration_transit, na.rm = TRUE),
+            avg_duration_walking = mean(duration_walking, na.rm = TRUE),
+            
+            ratio_dura_transit_driving = avg_duration_transit/avg_duration_driving
+            ) %>%
+  st_drop_geometry() %>% 
+  left_join(zctas, by=c("zipCode"="GEOID20")) %>% 
+  st_as_sf() %>% 
+  select(-ZCTA5CE20, -AFFGEOID20, -NAME20, -LSAD20, -ALAND20, -AWATER20)
+
+
+#Map ratio of average transit trip time to average driving trip time 
+pal <- leaflet::colorNumeric(viridis::viridis_pal(option = "F", direction = -1, 
+                                                  begin = 0, end = 1)(5), 
+                             domain = dat_zc_duration$ratio_dura_transit_driving)
+
+dat_zc_duration %>% 
+  filter(!is.na(ratio_dura_transit_driving)) %>%
+  mutate(label = paste0("<b>", zipCode, ":</b> ", round(ratio_dura_transit_driving, digits = 2))) %>%
+  leaflet(.) %>% 
+  addProviderTiles(providers$CartoDB.Positron) %>% 
+  addPolygons(
+    color = "transparent", weight = 0.1, opacity = 1,
+    fillColor = ~pal(ratio_dura_transit_driving), fillOpacity = 0.7,
+    label = ~lapply(label, HTML),
+    labelOptions = labelOptions(direction = "top"),
+    highlight = highlightOptions(
+      color = "#FFF", bringToFront = TRUE
+    )
+  ) %>%
+  addLegend(
+    values = ~ratio_dura_transit_driving, opacity = 0.7,
+    pal = pal,
+    title = "Transit/driving time ratio", 
+    position = "topleft"
+  )
+
+```
+
+### 4.6. There are distinct “types” of Penn employee commuters
+
+This section aims to identify different "types" of Penn employee commuters who share 
+similar travel behaviors. We first use K-means cluster analysis of commuters - an 
+algorithm that identifies clusters in multi-dimensional data - to find
+a proper value of K clusters, which is 6 in our results.
+
+
+```{r k means commuters, warning = FALSE, message = FALSE, fig.align='center', fig.width=6, fig.height=3}
+set.seed(123)
+
+library(cluster)
+library(factoextra)
+
+# function to compute total within-cluster sum of square 
+wss2 <- function(k) {
+  kmeans(dat %>% 
+           as.data.frame() %>%
+           mutate(across(matches("modeChoice"), as.numeric)) %>%
+           select(matches("modeChoice")), k, nstart = 10 )$tot.withinss
+}
+
+# Compute and plot wss for k = 1 to k = 15
+k.values2 <- 1:15
+
+# extract wss for 2-15 clusters
+wss_values2 <- map_dbl(k.values2, wss2)
+
+# Run "elbow plot" to determine optimal cluster number.
+plot(k.values2, wss_values2,
+       type="b", pch = 19, frame = FALSE, 
+       xlab="Number of clusters K",
+       ylab="Total within-clusters sum of squares")
+
+# Create a data object with cluster numbers
+test2 <- kmeans(dat %>%
+                  as.data.frame() %>%
+           mutate(across(matches("modeChoice"), as.numeric)) %>%
+           select(matches("modeChoice")), centers = 5, nstart = 25)
+
+dat %>% 
+  cbind(test2$cluster) %>% 
+  mutate(test2.cluster = as.character(test2.cluster)) %>%
+  mapView(., zcol = "test2.cluster")
+
+```
+
+In this step, we use k=6 to identify 6 dominant user types among survey subjects.
+Based on the number of days these employees chose to use the four dominant modes 
+(driving, biking, walking, and transit), we define 5 distinct “types” of Penn employee 
+commuters:
+
+- **Cluster 5** - Frequent transit commuter (32.7%): Commutes to campus 3-5 days, uses transit overwhelmingly, 
+and uses other modes periodically.
+
+- **Cluster 1** - Drive-only commuter (19.6%): Drives to campus 3-5 days, does not use other modes, 
+and has a relatively high transit time relative to drive time.
+
+- **Cluster 4** - Infrequent commuter (27.2%): Commutes fewer than 3 days, uses car and/or transit. 
+Roughly ⅓ of this group use multiple modes per week.
+
+- **Cluster 2** - Frequent walker (13.0%): Commutes to campus 3-5 days, mostly walks but uses other 
+modes as needed.
+
+- **Cluster 3** - Biker (7.3%): Commutes to campus 2-5 days, mostly bikes but uses other modes as needed.
+
+
+
+```{r commuters types, warning = FALSE, message = FALSE, fig.width=12, fig.height=6}
+dat %>% 
+  cbind(test2$cluster) %>% 
+  mutate(test2.cluster = as.character(test2.cluster)) %>%
+  as.data.frame() %>%
+  group_by(test2.cluster) %>%
+  summarise(n = n()) %>%
+  mutate(pct = n/sum(n)*100) %>%  
+  as.data.frame() %>%
+  rename("Cluster #" = test2.cluster, 
+         "Subjects" = n,
+         "Percentage share (%)" = pct) %>% 
+  kable(., "html", digits=1, align = "lccrr") %>%
+  kable_styling()
+
+
+dat %>% 
+  cbind(test2$cluster) %>% 
+  mutate(test2.cluster = as.character(test2.cluster)) %>%
+  as.data.frame() %>%
+  mutate(across(matches("modeChoice"), as.numeric)) %>%
+  rename(bike = modeChoice_4,
+         transit = modeChoice_2,
+         drive_alone = modeChoice_1,
+         walk = modeChoice_3) %>%
+  select(test2.cluster, bike, transit, drive_alone, walk ) %>%
+  gather(-test2.cluster, key = "variable", value = "value") %>%
+  filter(value > 0) %>%
+  ggplot()+
+  geom_histogram(aes(value), binwidth = 1, fill = '#FE6822')+
+  facet_grid(variable~test2.cluster)+
+  labs(title = "User clusters: commuting days by mode per week",
+       x = "# commuting days",
+       y=  "Count")+
+  plotTheme12ptY + coord_flip()
+```
+
+
+```{r commuters types plot, warning = FALSE, message = FALSE, fig.width=12, fig.height=4}
+dat %>% 
+  cbind(test2$cluster) %>% 
+  mutate(test2.cluster = as.character(test2.cluster)) %>%
+  as.data.frame() %>%
+  ggplot()+
+  geom_bar(aes(commuteCampus_1), fill = '#FE6822')+
+  facet_wrap(~test2.cluster)+
+  labs(title = "User clusters: commuting days per week",
+       x = "# commuting days",
+       y=  "Count")+
+  plotTheme12ptY + coord_flip()
+
+```
+
+</br>
+
+### 4.7. More than half participate in commuter benefit programs, but familiarity with programs is low
+
+Penn offers a range of commuting benefit programs. In the survey, we asked two questions 
+targeting at commuters' awareness and participation of those commuter benefit programs: 
+
+- *Have you heard of any of the following programs? Please select the ones you’ve heard of.*
+
+- *Have you participated in any of the following programs? Please select the ones you’ve participated in.*
+
+```{r commuting benefit programs, warning = FALSE, message = FALSE, fig.width=12, fig.height=4.5}
+
+# a comparison plot of program participation and awareness
+ggplot(dat %>%
+         st_drop_geometry() %>% 
+         select(matches("commuterProgramsPart")) %>%
+         gather(key = "variable", value = "value") %>%
+         filter(value != "") %>% 
+         group_by(value) %>%
+         summarise(count = n(),
+                   pct = count/nrow(dat)*100,
+                   type = "Participation") %>% 
+         rbind(dat %>%
+                   st_drop_geometry() %>% 
+                   select(matches("commuterProgramsHear")) %>%
+                   gather(key = "variable", value = "value") %>%
+                   filter(value != "") %>% 
+                   group_by(value) %>%
+                   summarise(count = n(),
+                             pct = count/nrow(dat)*100,
+                             type = "Awareness")),
+      aes(x=reorder(value, pct), y=pct, fill = type))+
+      geom_bar(position='dodge', stat='identity')+
+      scale_fill_manual('', values=c('#e5e5e5','#FE6822')) +
+      geom_text(aes(label=round(pct, digits=1)), 
+                    position=position_dodge(width=0.9), hjust =0.1, size=4) + 
+      labs(# title = "Penn Commuting Benefit Programs Participation",
+            y="Percentage share (%)",
+            x=" "
+            )+
+  plotTheme12ptY+
+  coord_flip()
+```
+
+54.5% of subjects reported using a commuter benefit program. The WageWorks Commuter 
+Card (23.9%) and Monthly Parking Permit (15.3%) were the most commonly used. “Drive-only 
+commuters” were the only user group likely to use the Monthly Parking Permit. This 
+figure is higher than the 48% of employees registered for such commuter benefits 
+in March, 2021^[This figure was stated in personal communications from FRES to Praxis 
+in project development.].
+
+No more than half of the subjects reported familiarity with any one program. The 
+Monthly Parking Permit (49.9%), WageWorks Commuter Card (40.0%), and Bike Reimbursement 
+Program (25.9%) were the most well-known.
+
+
+## 5. Sustainability Implications of Travel Behavior
+
+### 5.1. Many employees locate in areas with sustainable commuting options 
+
+With survey subjects' residence location information and their commuting behaviors,
+we were able to investigate how do Penn commuters make commuting decisions in addition 
+location choices. As the maps in the last section (The geography of commuting at Penn) 
+and below show, a significant portion of survey subjects live relatively close to work. 
+We summarized the total subjects living in, total trips originated from, and mode share 
+in each neighborhood (zip code). The top five subject zip codes form a contiguous block 
+around campus. The top 20 comprise core city areas and nearby suburbs. 
+
+
+```{r mode by zipcode, warning = FALSE, message = FALSE, fig.width=10, fig.height=4}
+dat_zc_mode %>% st_drop_geometry() %>%
+  select(zipCode, total_people, avg_days, total_days, 
+         pct_drive, pct_transit, pct_walk, pct_bicycle,
+         avg_duration_driving, avg_duration_transit, avg_duration_walking) %>% 
+  arrange(desc(total_people)) %>% head(10) %>% 
+  rename("Neighborhood name" = zipCode, "Average commuting days per week" = avg_days,
+         "Total commuting days per week" = total_days, "% days riding transit" = pct_transit,
+         "% days driving" = pct_drive, "% days walking" = pct_walk, 
+         "% days riding bike" = pct_bicycle) %>% 
+  merge(., 
+            get_acs(geography = "zcta", 
+                    #state= 42,#
+                    year = 2021,
+                    zcta = c("19104", "19103", "19146", "19143",
+                             "19147", "19130", "19139", "19148", 
+                             "19063", "19083"),
+                    variables = c('B19013_001'),
+                    survey = "acs5",
+                    output = "wide",
+                    #geometry = TRUE
+                    ) %>% rename("MedianHHIncome" = B19013_001E) %>% 
+              select(GEOID, MedianHHIncome), 
+        by.x = "Neighborhood name", by.y = "GEOID") %>%
+  kable(., "html", digits=1, align = "lccrr") %>%
+  kable_styling(position = "center") %>% 
+  scroll_box(width = "600px", height = "500px")
+```
+
+```{r mode by zipcode maps, warning = FALSE, message = FALSE, fig.width=14, fig.height=11}
+#Map total commuting trips by driving onto the base map
+pal <- leaflet::colorNumeric(viridis::viridis_pal(option = "F", direction = -1, 
+                                        begin = 0, end = 1)(5), domain = dat_zc_mode$total_drive)
+
+dat_zc_mode %>% 
+  mutate(label = paste0("<b>", zipCode, ":</b> ", total_drive)) %>%
+  leaflet(.) %>% 
+  addProviderTiles(providers$CartoDB.Positron) %>% 
+  addPolygons(
+    color = "transparent", weight = 0.1, opacity = 1,
+    fillColor = ~pal(total_drive), fillOpacity = 0.7,
+    label = ~lapply(label, HTML),
+    labelOptions = labelOptions(direction = "top"),
+    highlight = highlightOptions(
+      color = "#FFF", bringToFront = TRUE
+    )
+  ) %>%
+  addLegend(
+    values = ~total_drive, opacity = 0.7,
+    pal = pal,
+    title = "Total driving trips to campus in a week from here", 
+    position = "topleft"
+  )
+
+
+#Map total commuting trips by transit onto the base map
+pal <- leaflet::colorNumeric(viridis::viridis_pal(option = "F", direction = -1, 
+                                        begin = 0, end = 1)(5), domain = dat_zc_mode$total_transit)
+
+dat_zc_mode %>% 
+  mutate(label = paste0("<b>", zipCode, ":</b> ", total_transit)) %>%
+  leaflet(.) %>% 
+  addProviderTiles(providers$CartoDB.Positron) %>% 
+  addPolygons(
+    color = "transparent", weight = 0.1, opacity = 1,
+    fillColor = ~pal(total_transit), fillOpacity = 0.7,
+    label = ~lapply(label, HTML),
+    labelOptions = labelOptions(direction = "top"),
+    highlight = highlightOptions(
+      color = "#FFF", bringToFront = TRUE
+    )
+  ) %>%
+  addLegend(
+    values = ~total_transit, opacity = 0.7,
+    pal = pal,
+    title = "Total public transit trips to campus in a week from here", 
+    position = "topleft"
+  )
+
+
+
+#Map total commuting trips by walking or biking onto the base map
+dat_zc_mode <- dat_zc_mode %>% 
+  mutate(total_walkbike = total_walk+total_bicycle)
+
+pal <- leaflet::colorNumeric(viridis::viridis_pal(option = "F", direction = -1, 
+                                        begin = 0, end = 1)(4), domain = dat_zc_mode$total_walkbike)
+
+dat_zc_mode %>% 
+  mutate(label = paste0("<b>", zipCode, ":</b> ", total_walkbike)) %>%
+  leaflet(.) %>% 
+  addProviderTiles(providers$CartoDB.Positron) %>% 
+  addPolygons(
+    color = "transparent", weight = 0.1, opacity = 1,
+    fillColor = ~pal(total_walkbike), fillOpacity = 0.7,
+    label = ~lapply(label, HTML),
+    labelOptions = labelOptions(direction = "top"),
+    highlight = highlightOptions(
+      color = "#FFF", bringToFront = TRUE
+    )
+  ) %>%
+  addLegend(
+    values = ~total_walkbike, opacity = 0.7,
+    pal = pal,
+    title = "Total walking or biking trips to campus in a week from here", 
+    position = "topleft"
+  )
+
+```
+
+Philadelphia’s walkability and expansive transit network means these subjects have 
+good access to work. As the table below shows, half of the subjects have a rush 
+hour transit option of under 40 minutes. A quarter of subjects can walk to campus 
+in under 35 minutes. 
+
+```{r transport duration table, warning = FALSE, message = FALSE, fig.width=10, fig.height=4}
+
+st(st_drop_geometry(dat),
+   vars = c('duration_transit', 'duration_walking', 'duration_driving'),
+   summ = c('mean(x)',  'pctile(x)[25]', 'median(x)', 'pctile(x)[75]'),
+   out="kable") %>% 
+  kable_styling()
+
+```
+
+Generally, there is a strong preference for sustainable commuting and a willingness 
+to pay for it among the Penn community (through real estate choices). Since nearby 
+zip codes contain some of the more expensive real estate in the city and region, 
+this also implies something about the purchasing power of Penn employees to satisfy 
+their location-commuting preferences. 
+
+
+</br>
+
+### 5.2. Some drivers are interested in reducing the impact of their work travel
+
+To better understand frequent drivers' attitude towards sustainable transportation
+and who may be "change candidates" that want to switch to other modes for sustainable reasons,
+we asked subjects two questions regarding the environmental impacts of their commutes:
+
+- *To what degree do you agree with the following statement: "It is important to me to reduce the environmental impact of my travel to work."*
+
+- *To what degree do you agree with the following statement: "I think it's worth some personal inconvenience to reduce the environmental impact of my travel to work."*
+
+
+Responses are then summarized by frequent drivers (19.4% of subjects) vs. others 
+(80.6% of subjects).
+
+```{r drivers env impact q1, warning = FALSE, message = FALSE, fig.width=10, fig.height=3}
+
+# environmental question 1
+# envImpact_1_order <- c("Strongly disagree", "Disagree", "Neither agree nor disagree", "Agree", "Strongly Agree")
+
+envImpact_1_dummy_order <- c("Disagree or Nuetral", "Agree")
+
+dat <- dat %>% mutate(envImpact_1_dummy = ifelse(envImpact_1 %in% c("Agree", "Strongly Agree"), 
+                                                 "Agree", "Disagree or Nuetral"))
+
+ggplot(dat %>%
+          st_drop_geometry() %>% 
+          select(envImpact_1_dummy, driveAloneDummy) %>%
+          mutate(
+          envImpact_1 = factor(envImpact_1_dummy, levels=envImpact_1_dummy_order)
+      ) %>% 
+          gather(-driveAloneDummy, key = "variable", value = "value") %>%
+          filter(value != "") %>% 
+          group_by(value, driveAloneDummy) %>% 
+          summarise(count = n()) %>% 
+          group_by(driveAloneDummy) %>% 
+          mutate(Percentage = count/sum(count)*100),
+          aes(x=value, y=Percentage))+
+            geom_bar(stat='identity', fill = '#FE6822')+   #'#1c9099'
+            geom_text(aes(label=round(Percentage, digits=1)), 
+                      position=position_dodge(width=0.9), hjust =-0.1, size=4) + 
+            facet_wrap(~driveAloneDummy)+
+            labs(title = "Environmental impact question 1 by mode choice",
+                 subtitle = "Left: subjects driving < 3 days/week; Right: subjects driving alone 3+ days/week",
+                 y="Percentage share (%)",
+                 x = "Attitude"
+                 )+
+    coord_flip()
+```
+
+
+```{r drivers env impact q2, warning = FALSE, message = FALSE, fig.width=10, fig.height=3}
+# environmental impact question 2
+envImpact_2_dummy_order <- c("Disagree or Nuetral", "Agree")
+
+dat <- dat %>% mutate(envImpact_2_dummy = ifelse(envImpact_2 %in% c("Agree", "Strongly Agree"), 
+                                                 "Agree", "Disagree or Nuetral"))
+
+ggplot(dat %>%
+          st_drop_geometry() %>% 
+          select(envImpact_2_dummy, driveAloneDummy) %>%
+          mutate(
+          envImpact_2 = factor(envImpact_2_dummy, levels=envImpact_2_dummy_order)
+      ) %>% 
+          gather(-driveAloneDummy, key = "variable", value = "value") %>%
+          filter(value != "") %>% 
+          group_by(value, driveAloneDummy) %>% 
+          summarise(count = n()) %>% 
+          group_by(driveAloneDummy) %>% 
+          mutate(Percentage = count/sum(count)*100),
+          aes(x=value, y=Percentage))+
+            geom_bar(stat='identity', fill = '#FE6822')+   
+            geom_text(aes(label=round(Percentage, digits=1)), 
+                      position=position_dodge(width=0.9), hjust =-0.1, size=4) + 
+            facet_wrap(~driveAloneDummy)+
+            labs(title = "Environmental impact question 2 by mode choice",
+                 subtitle = "Left: subjects driving < 3 days/week; Right: subjects driving alone 3+ days/week",
+                 y="Percentage share (%)",
+                 x="Attitude"
+                 )+
+    coord_flip()
+```    
+
+
+As shown in the plots, 40.3% of subjects who driver 3+ days in the week (19.4%) agreed 
+that "it is important to me to reduce the environmental impact of my travel to work."
+We then cross-checked whether they could reasonably access sustainable modes.
+
+```{r drivers env impact sustainable modes, warning = FALSE, message = FALSE}
+
+dat %>%  filter(driveAloneDummy == 1) %>% #filter(modeChoice_2 != 0) %>% 
+  mutate(transitAccessDummy = ifelse(reasonabilyUtilize_2 == "Public Transit", 1, 0),
+         envImpact_transitAccess_dummy = ifelse(envImpact_1_dummy=="Agree" & transitAccessDummy == 1, 1, 0)) %>%
+  calculate_share("envImpact_1_dummy") %>% 
+  st_drop_geometry() %>% 
+  rename("Does respondent value sustainability in transportation" = envImpact_1_dummy,
+         Count = count, "Share (%)" = share) %>% 
+  kable(., "html", digits=1, align = "lccrr") %>%
+  kable_styling()
+
+
+dat %>%  filter(driveAloneDummy == 1) %>% #filter(modeChoice_2 != 0) %>% 
+  mutate(transitAccessDummy = ifelse(reasonabilyUtilize_2 == "Public Transit", 1, 0),
+         envImpact_transitAccess_dummy = ifelse(envImpact_1_dummy=="Agree" & transitAccessDummy == 1, 1, 0)) %>%
+  calculate_share("envImpact_transitAccess_dummy") %>% 
+  st_drop_geometry() %>% 
+  rename("Does respondent value sustainability in transportation AND have access to transit" = envImpact_transitAccess_dummy, 
+         Count = count, "Share (%)" = share) %>% 
+  kable(., "html", digits=1, align = "lccrr") %>%
+  kable_styling()
+
+```
+
+Therefore, we consider roughly 6% of the survey sample as strong candidates to shift from regular 
+driving to a more sustainable mode of transportation - these subjects represent 30.8% 
+of the 19.4% of subjects who drive 3+ days per week. These “change candidates” are 
+regular drivers who agree that “It is important to me to reduce the environmental 
+impact of my travel to work” and say they could reasonably access sustainable modes. 
+
+Getting these drivers to shift might require addressing the barriers they face to using transit.
+
+</br>
+
+### 5.3. There are important barriers to transit use, many related to the quality of service
+
+
+Even with an exiting high use of transit among Penn commuters compared to Philadelphia 
+region, there are still many subjects chose to not take public transportation for commuting.
+Why do some Penn faculty and staff avoid transit? In the survey, we asked people "what 
+reasons kept you from using public transit for your trips to work last week?" Subjects 
+chose all reasons (up to 3) in the list that apply.
+
+The bar plot below summarizes subjects' responses in a descending order and displays
+the percentage share of subjects who chose individual reasons. 
+
+```{r trasit reasons plots, warning = FALSE, message = FALSE, fig.width=12, fig.height=4}
+ggplot(dat %>%
+           st_drop_geometry() %>% 
+           select(matches("whyTransit_")) %>%
+           gather(key = "variable", value = "value") %>%
+           filter(value != "") %>% 
+          calculate_share(.,"value"),
+          aes(x=reorder(value, share), y=share))+
+            geom_bar(stat='identity', fill = '#FE6822')+   
+            geom_text(aes(label=round(share, digits=1)),
+            position=position_dodge(width=0.9), hjust =0.1, size=5) +
+              labs(
+                y="\nPercentage share (%)",
+                x="Reason to not take transit\n",
+                )+
+            plotTheme12ptY+
+    coord_flip()
+```
+
+First, about 21% of subjects prefer their current type of transportation over public
+transportation. By cross tabulating their travel behaviors (days per week and time of day)
+against transit use, we found that **Predictability** is a critical factor that keeps
+people from using transit to commute. Those with predictable, regular commutes are the most likely to 
+take transit: the converse is that non-daily, non-morning commuting is correlated 
+with not taking public transportation. 
+
+[NEED CODE FOR THIS PART]
+
+```{r trasit use and behaviors, warning = FALSE, message = FALSE, fig.width=12, fig.height=4}
+
+
+
+
+```
+
+
+
+As the plot shows, the remaining barriers to transit use are:
+
+- **Compatibility** - 12.6% of those who can but do not take transit say it is “not 
+compatible with my schedule.”
+
+- **Availability** - there are “transit deserts” in the region that have high drive-share. 
+These include areas of Gloucester County, NJ, exurban parts of Montgomery County, 
+and some pockets of the western suburbs inaccessible to regional rail.
+
+- **Access** - Some lack a practical transit option, or they have age or mobility concerns 
+that preclude using transit.
+
+- **Safety** - 10.9% of those who could but do not take transit say it “doesn’t seem safe.” 
+This sentiment is concentrated in areas of Philadelphia, including western zip codes 
+in West Philadelphia.
+
+- **Convenience** - Transit times are too long in some areas. 19.4% of those who could 
+but do not take transit say it “takes too long.” The relative utility of transit 
+was also found to predict transit use.
+
+- **Cost** - Cost was not listed as a top deterrent to taking transit (perhaps owing to 
+the price insensitivity of Penn employees, who are, as a group, relatively well compensated). 
+
+</br>
+
+### Commuting patterns often don’t align with benefit programs
+
+The below barplots show that *WageWorks Commuter Card* and *Monthly Parking Permit* are 
+the two most popular programs that Penn commuters participated in. Many of the program 
+participants commute only 1-2 days per week - not as expected as frequently to benefit from
+enrolling in the programs.
+
+```{r transit program use and commuting days, warning = FALSE, message = FALSE, fig.width=12, fig.height=6}
+ggplot(dat %>%
+         st_drop_geometry() %>% 
+         select(matches("commuterProgramsPart"), commuteCampus_1) %>% 
+         gather(-commuteCampus_1, key = "variable", value = "value") %>%
+         filter(value != "", commuteCampus_1 != "") %>% 
+         group_by(commuteCampus_1, value) %>%
+         summarise(count = n()), 
+      aes(x=commuteCampus_1, y=count))+
+  geom_bar(stat='identity',fill = '#FE6822')+
+  facet_wrap(~value)+
+  labs(x = "# Days commuting per week",
+       title="Commuter Programs Participation",
+       y="Total participants",
+       )+
+  plotTheme12ptY+
+  coord_flip()
+
+```
+
+
+We then developed a binomial logit regression model to estimate the association between 
+frequent transit users and multiple factors, including participation in Penn commuter
+benefit programs. We found that program participation can drive sustainable choices. 
+Subjects’ real program participation in parking or transit programs was strongly 
+associated with their choices in hypothetical scenarios^[Controlling for relative 
+and total driving and transit time, environmental preferences, income, age, having 
+children, frequency of commute, and arrival time]. 
+
+```{r freq transit rider, warning = FALSE, message = FALSE}
+# Frequent Transit User
+glm(data = dat %>%
+      as.data.frame() %>%
+      filter(!is.na(duration_transit) & 
+               !is.na(distance_transit) &
+               commuteCampus_1 != 0) %>% 
+      mutate(transitDummy = ifelse(modeChoice_2 > 2 , 1, 0),
+             heardTransitProgram = ifelse(commuterProgramsHear_1 != "" & 
+                                            commuterProgramsHear_2 != "", 1,0),
+             duration_transit_min = duration_transit/60,
+             duration_driving_min = duration_driving/60,
+             commute_frequency = case_when(commuteCampus_1 >= 3 ~ "3+ days commuting", 
+                                           commuteCampus_1 >1 & commuteCampus_1 <5 ~ "1-4 days commuting"),
+             over_150K_hh_income = ifelse(income == "$150,000 or more", "$150,000 or more", "Under $150,000"),
+             arrival = case_when(arrivalTime %in% c("Prior to 6AM", "6:00 PM or later") ~ "Overnight",
+                                 arrivalTime %in% c("10:00-12:00 PM", "8:00-10:00 AM", "6:00-8:00 AM") ~ "AM",
+                                 !arrivalTime %in% c("Prior to 6AM", "6:00 PM or later",
+                                                     "10:00-12:00 PM", "8:00-10:00 AM", "6:00-8:00 AM") ~
+                                   "Afternoon")),
+    transitDummy ~ 
+      as.factor(age) + 
+      #as.factor(commute_frequency)+
+      arrival+
+      reasonabilyUtilize_2+
+      as.factor(commute_frequency)+
+      as.factor(over_150K_hh_income) + 
+      as.factor(childrenDependents) +
+      as.factor(commuterProgramsPart_2) +
+      as.factor(commuterProgramsPart_6) +
+      as.factor(commuterProgramsPart_3) +
+      as.factor(commuterProgramsPart_5) +
+      medSchoolDummy + 
+      duration_transit_min, 
+    family = binomial(link="logit")) %>%
+    tidy() %>%
+  kable(., "html", digits=2, align = "lccrr") %>%
+  kable_styling()
+
+```
+
+</br>
+
+With a deep dive into Penn commuters' actual mode choices and their participation in
+commuter benefit programs, we found that several things are depressing the impact 
+of sustainable travel programs.
+
+**NOTE: NEED ANALYSIS CODE FOR THESE FINDINGS!**
+
+```{r commuter benefit program use plots, warning = FALSE, message = FALSE, fig.width=8, fig.height=3}
+
+# transit days share
+calculate_share(dat, "modeChoice_2") %>% 
+  select(modeChoice_2, count, share) %>% 
+  filter(share != "") %>% 
+  st_drop_geometry() %>% 
+  arrange(-share) %>% 
+  rename("Number of days respondent takes transit" = modeChoice_2, 
+         Count = count, "Share (%)" = share)%>%
+  kable(., "html", digits=1, align = "lccrr") %>%
+  kable_styling()
+
+
+# number of modes used for commuting in a week
+calculate_share(subset(dat, commute_days > 0 & num_mode > 0), "num_mode") %>% 
+  select(num_mode, count, share) %>% 
+  filter(share != "") %>% 
+  st_drop_geometry() %>% 
+  arrange(-share) %>% 
+  rename("Number of modes used for commuting to campus in a week" = num_mode, 
+         Count = count, "Share (%)" = share)%>%
+  kable(., "html", digits=1, align = "lccrr") %>%
+  kable_styling()
+
+
+
+
+# dat %>% st_drop_geometry() %>%
+#   filter(reasonabilyUtilize_4 == "Bike") %>%
+#   mutate(commuterProgramsHear_5 = ifelse(commuterProgramsHear_5 == "", "No", "Yes")) %>%
+#   group_by(commuterProgramsHear_5) %>%
+#   summarise(Count = n()) %>%
+#   mutate(Total = sum(Count),
+#          Share = Count/Total*100) %>%
+#   select(-Total)  %>%
+#   rename("Awareness of Bike Commuter Reimbursement Program" = commuterProgramsHear_5)%>%
+#   kable(., "html", digits=1, align = "lccrr") %>%
+#   kable_styling()
+
+
+# dat %>% st_drop_geometry() %>%
+#   mutate(useRate = as.numeric(modeChoice_4old)/commute_days,
+#          over50 = ifelse(useRate >= 0.5, "Yes", "No"),
+#          #over4 = ifelse(modeChoice_4 > 3, "Yes", "No"),
+#          BikeProgram = ifelse(commuterProgramsPart_5 != "", "Yes", "No")) %>%
+#   group_by(BikeProgram, over50) %>%
+#   summarise(Count = n()) %>%
+#   rename("Bike over 50% in a week" = over50,
+#          "Bike commuter reimbursement program participation" = BikeProgram)%>%
+#   kable(., "html", digits=1, align = "lccrr") %>%
+#   kable_styling()
+
+
+```
+
+
+- Many employees commute too infrequently to have some programs fit their needs. 
+
+  - A discounted SEPTA TransPass or TrailPass (40+ trips per month) is not economical 
+  unless you use it 5 days per week. Only 11.0% of subjects take public transportation 
+  that frequently. 
+  
+- Some benefits are focused on the commuter that makes routine, everyday choices. 
+Over 20% of employees use multiple modes in a week.
+
+- Many don’t know about programs that could suit their choices. 
+  - Of the 17.5% who use transit 3+ days and don’t participate in a program, the 
+  majority (74.1%) of them have never heard of WageWorks and PATCO Freedom.
+  
+  - Of those who reported they could reasonably bike to work, 29.5% reported being 
+  unaware of the program.
+  
+- The Bike Commuter Program is geared towards those who bike 50% or more of the time^[https://cms.business-services.upenn.edu/transportation/walking-biking/bike-commuter-reimbursement.html
+]. 49 program participants reported less than 50% usage in the survey week, while 93 
+non-participants reported biking over 50% of the time.
+
+</br>
+
+### 5.5. Demand for electric vehicles is strong, but adoption is unlikely to change commuting patterns. 
+
+In the travel survey, we asked two questions regarding the electric vehicles (EVs) use. 
+The first question is "do you own, or are you considering buying an electric vehicle?" 
+The second question is "are there enough electric vehicle charging stations near your 
+workplace?"	
+
+The below bar plot summarizes subjects responses for the first EV question, Right now, 
+6.3% of survey subjects report owning EVs. This group makes up roughly 11.1% of the 
+driving days to campus in a given week. An additional 37.9% of subjects, (representing 
+43.3% of driving days) are considering purchasing an EV. 
+
+
+
+```{r ev use plots, warning = FALSE, message = FALSE, fig.width=6, fig.height=2.5, fig.align='center'}
+ggplot(dat %>%
+           st_drop_geometry() %>% 
+           select(evUse) %>%
+           gather(key = "variable", value = "value") %>%
+           filter(value != "") %>% 
+          calculate_share(.,"value"),
+          aes(x=value, y=share))+
+            geom_bar(stat='identity', fill = '#FE6822')+   
+            geom_text(aes(label=round(share, digits=1)), 
+                      position=position_dodge(width=0.9), hjust =0.4, size=5) + 
+            labs(
+                y="\nPercentage share (%)",
+                x="EV use",
+                )+
+            plotTheme12ptY+
+    coord_flip()
+
+```
+
+
+```{r ev use plots 2, warning = FALSE, message = FALSE, fig.width=12, fig.height=5}
+
+dat %>%  st_drop_geometry() %>% 
+         select(evUse, matches("modeChoice"), - ends_with("old")) %>%
+         rename(bike = modeChoice_4,
+               transit = modeChoice_2,
+               drive_alone = modeChoice_1,
+               walk = modeChoice_3,
+               rideShare = modeChoice_9,
+               pennTransit = modeChoice_8,
+               carpoolDrive = modeChoice_5,
+               carpoolPassenger = modeChoice_6,
+               vanpool = modeChoice_7,
+               otherMobility = modeChoice_10) %>%
+         gather(-evUse, key = "variable", value = "value") %>%
+         filter(value != "" & evUse != "") %>% 
+         group_by(variable, evUse) %>%
+  filter(variable %in% c("transit", "walk", "drive_alone", "bike")) %>%
+  summarize(sum_days = sum(as.numeric(value))) %>%
+  mutate(total_days = sum(sum_days),
+         Percentage = sum_days/total_days*100) %>%
+  ggplot(aes(y = Percentage, x = evUse))+
+  geom_bar(stat = "identity",fill = '#FE6822')+
+  geom_text(aes(label=round(Percentage, digits=1)),  
+            position=position_dodge(width=0.9), hjust =0.4, size=4) +
+  facet_wrap(~variable)+
+  labs(title = "Exiting total commuting days per week by EV use",
+    y="Percentage share (%)",
+    x="EV Use")+
+  plotTheme12ptY+
+  coord_flip()
+
+```
+
+Regarding the second EV question, we found that there will likely be an increased need 
+for charging facilities around campus as EVs make up a larger proportion of the vehicle 
+fleet. However, we believe interested buyers’ travel behavior seems unlikely to change
+- The factors that are most strongly associated with travel choices (location, schedule, 
+availability, etc.,) are not likely to be affected by an EV purchase.
+
+
+```{r ev demand plots, warning = FALSE, message = FALSE, fig.width=6, fig.height=2.5, fig.align='center'}
+ggplot(dat %>%
+           st_drop_geometry() %>% 
+           select(evDemand) %>%
+           gather(key = "variable", value = "value") %>%
+           filter(value != "") %>% 
+          calculate_share(.,"value"),
+          aes(x=value, y=share))+
+            geom_bar(stat='identity', fill = '#FE6822')+  
+            geom_text(aes(label=round(share, digits=1)), 
+                      position=position_dodge(width=0.9), hjust =0.4, size=5) + 
+            labs(
+                y="\nPercentage share (%)",
+                x="EV station demand",
+                )+
+            plotTheme12ptY+
+    coord_flip()
+
+```
+
+</br>
+
+### 5.6. Long-distance travel behavior: there is latent demand for sustainable transit
+
+Roughly a quarter (23.9%) said they travel long-distance for work. 
+
+```{r long dist travel, warning = FALSE, message = FALSE, fig.width=6, fig.height=2.5, fig.align='center'}
+ggplot(dat %>%
+           st_drop_geometry() %>% 
+           select(longdistYN) %>%
+           gather(key = "variable", value = "value") %>%
+           filter(value != "") %>% 
+          calculate_share(.,"value"),
+          aes(x=value, y=share))+
+            geom_bar(stat='identity', fill = '#FE6822')+  
+            geom_text(aes(label=round(share, digits=1)), 
+                      position=position_dodge(width=0.9), hjust =0.4, size=5) + 
+            labs(
+                y="\nPercentage share (%)",
+                x="Long-distance travel",
+                )+
+            plotTheme12ptY+
+    coord_flip()
+```
+
+We asked about preferences for modes where reasonable alternatives were available. 
+For short trips, like to New York, subjects overwhelmingly favored rail (88%). On 
+longer trips, this percentage favoring rail was predictably lower (i.e., 34% to Boston) 
+and the preference for alternatives like air travel was higher (53% to Boston). 
+
+The proportion preferring sustainable transportation is higher than expected – 
+typically once a rail trip is over 3.5 hours, the percentage of possible passengers 
+drops precipitously. This means that Penn employees favor sustainable long distance 
+travel options more than the general population.
+
+
+```{r long dist plots, warning = FALSE, message = FALSE, fig.width=15, fig.height=5}
+
+ggplot(calculate_share(dat %>% filter(longdistTripsNYC != ""), "longdistTripsNYC"),
+       aes(x=longdistTripsNYC, y=share) )+
+  geom_bar(stat='identity', fill = '#FE6822')+   
+  geom_text(aes(label=round(share, digits=1)), 
+            position=position_dodge(width=0.9), hjust =-0.1, size=4) + 
+  labs(title = "Long distance travel to New York City",
+       x="Mode",
+       y="Percentage share (%)")+
+  plotTheme12ptY+
+  coord_flip()
+
+
+
+ggplot(calculate_share(dat %>% filter(longdistTripsBos != ""), "longdistTripsBos"),
+       aes(x=longdistTripsBos, y=share) )+
+  geom_bar(stat='identity', fill = '#FE6822')+   
+  geom_text(aes(label=round(share, digits=1)), 
+            position=position_dodge(width=0.9), hjust =-0.1, size=4) + 
+  labs(title = "Long distance travel to Boston",
+       x="Mode",
+       y="Percentage share (%)")+
+  plotTheme12ptY+
+  coord_flip()
+
+
+
+ggplot(calculate_share(dat %>% filter(longdistTripsPitt != ""), "longdistTripsPitt"),
+       aes(x=longdistTripsPitt, y=share) )+
+  geom_bar(stat='identity', fill = '#FE6822')+   
+  geom_text(aes(label=round(share, digits=1)), 
+            position=position_dodge(width=0.9), hjust =-0.1, size=4) + 
+  labs(title = "Long distance travel to Pittsburgh",
+       x="Mode",
+       y="Percentage share (%)")+
+  plotTheme12ptY+
+  coord_flip()
+```
+
+
+
+<!-- ## Recommendations -->
+
+<!-- 1. Publicly promote and interpret transit with installations. For instance, posting  -->
+<!-- transit maps and wayfinding information above ground on campus. Dr. Ryerson’s wayfinding  -->
+<!-- research, collaborating with numerous transit agencies and airports, finds that  -->
+<!-- branded wayfinding and information develops a sense of place for transit and normalizes  -->
+<!-- the act of taking transit. By branding and providing signage for the current service,  -->
+<!-- we can increase ridership.  -->
+
+<!-- 2. Share transit information with new hires– transit use is infectious! It’s clear  -->
+<!-- that home location and commuting choice are tied together. Therefore, communicating  -->
+<!-- transit options and information to new hires needs to be shared in a coordinated effort.  -->
+<!-- Highlighting the survey data that the Penn community overwhelmingly chooses sustainable  -->
+<!-- commuting options can also help influence choice. -->
+
+<!-- 3. Consider Penn’s role in the parking market The University dedicates valuable,  -->
+<!-- well-located land to parking structures. The University also subsidizes parking.  -->
+<!-- It’s well demonstrated that private parking operators price parking according to  -->
+<!-- demand. They influence commuter behavior by passing the real cost of driving and  -->
+<!-- parking along to consumers. Should the University diminish its role in the parking  -->
+<!-- market? Can on-street parking in the area be better managed? Consider studying how  -->
+<!-- market calibrated prices could affect the elasticity of demand for parking, and  -->
+<!-- support sustainable commuting provided options from public agencies. -->
+
+<!-- 4. Provide expanded options for transit passes, considering an opt-out model rather  -->
+<!-- than an opt-in. It was recently announced that the University will discount transit  -->
+<!-- passes by 50%. This is excellent. We still do think it’s important that city dwellers  -->
+<!-- have options for discounted transit passes that support the casual, flexible rider.  -->
+<!-- Currently, even with the 50% discount on the monthly pass, a rider would have to  -->
+<!-- take 20 SEPTA rides a month to break even. A further idea is to make the transit  -->
+<!-- pass program “opt-out,” instead of “opt-in.”  -->
+
+<!-- 5. Create flexible options that suit how Penn employees actually travel, e.g., fewer  -->
+<!-- than 40 trips. One of our most significant findings is that the Penn community values  -->
+<!-- options – people don’t commute the same way every day, and they don’t come in 5 days  -->
+<!-- a week. Therefore, having flexible options for commuter benefits (like daily parking  -->
+<!-- passes that are easy and transparent to purchase; discounted SEPTA passes for casual  -->
+<!-- riders; discounted Indigo bike share and other benefits) need to be explored. A large  -->
+<!-- proportion of the Penn population doesn’t participate in commuter benefits because  -->
+<!-- they are flexible commuters.  -->
+
+<!-- 6. Work with SEPTA and other agencies to provide needed options for Penn Employees.  -->
+<!-- Penn should be advocating for improving sustainable options for employees in transit  -->
+<!-- deserts and improved service (frequency and time-coverage) in key areas. Penn has well  -->
+<!-- established relationships with SEPTA and there is also a history of Penn’s advocacy  -->
+<!-- for service changes. This partnership is multifaceted and built on mutual success.  -->
+<!-- If Penn can boost SEPTA ridership, it will help SEPTA solve some issues with service  -->
+<!-- (more demand leads to more frequency) as well as safety “(eyes on the street”).  -->
+<!-- Penn can possibly also make their financial contribution to SEPTA through the  -->
+<!-- guaranteeing of the purchase of a certain number of SEPTA passes per year contingent  -->
+<!-- on improvements (increases in service/cleanliness/etc.).  -->
+
+<!-- 7. Message campaigns to improve participation in programs, including geographically  -->
+<!-- focused approaches. Communication and information can go a long way in encouraging  -->
+<!-- the Penn community to make more sustainable choices. We can target certain groups  -->
+<!-- of “change candidates” and inform them about options and opportunities. The goal  -->
+<!-- should be to clearly explain a person’s options and the relative benefits of each choice.  -->
+
+<!-- 8. Provide EV rental options for long-distance trips as an alternative to flying,  -->
+<!-- where no train is available. Members of the Penn community need options that are  -->
+<!-- efficient and sustainable for long-distance travel. Amtrak is simply not extensive;  -->
+<!-- flying is energy and fuel intensive. Providing EV rental options for long-distance  -->
+<!-- trips could help those who want to choose sustainable options to do so for long-distance travel.  -->
+
+<!-- 9. Study this commuter data set in more detail and consider replicating the survey.  -->
+<!-- The data set created through this survey is incredibly rich and detailed, and elements  -->
+<!-- of it remain unexplored. Students at Weitzman can do this through courses, through  -->
+<!-- studios, and through research experiences. This can be done for minimal cost, and  -->
+<!-- also showcases Penn’s commitment to integrating research, education, action, and  -->
+<!-- sustainability. Replicating the survey can be done in a cost-efficient way since  -->
+<!-- an analysis code and survey design are already complete.  -->
+
+
+## 6. Appendix - Data Dictionary
+
+This is a data dictionary listing all variables in the survey data for analysis 
+as well as brief descriptions and data type information.
+
+
+
+| Variable name         | Type | Description                                   |
+| :-------------------- | :--- | :-------------------------------------------- |
+| ***Basic survey information***                                             |||
+| `StartDate`           | chr  | The date/time when the response was started.  |
+| `EndDate`             | chr  | The date/time when the response was ended.    |
+| `Status`              | chr  | How the response was collected. Only one value available: "IP Address".   |
+| `IPAddress`           | chr  | A string of the IP address at which the response was submitted.           |
+| `Progress`            | chr  | A string of the completion percentage of response over the entire survey. |
+| `Duration (in seconds)` | chr | A string of total seconds taken for the response.                        |
+| `Finished`            | chr  | A binary indicating whether this response finished the entire survey: True or False. |
+| `RecordedDate`        | chr  | The date/time when the response was recorded. |
+| `ResponseId`          | chr  | A unique string identifier of the response.   |
+| `RecipientLastName`   | chr  | An empty string of recipient's last name (not collected in the survey).   |
+| `RecipientFirstName`  | chr  | An empty string of subject's first name (not collected in the survey).    |
+| `RecipientEmail`      | chr  | An empty string of subject's email address (not collected in the survey). |        
+| `ExternalReference`   | chr  | An empty string of subject's email address (not collected in the survey). |              
+| `LocationLatitude`    | chr  | Latitude of the survey response's location.   |       
+| `LocationLongitude`   | chr  | Longitude of the survey response's location.  |      
+| `DistributionChannel` | chr  | Channel used to distribute the survey. Only one value reported: "anonymous". |     
+| `UserLanguage`        | chr  | Language used to finish the survey. Only one value reported: "EN". | 
+| `Q_RecaptchaScore`    | chr  | Score for the Recaptcha verification question. Ranging from 0.1 to 1. |
+| ***Survey introduction questions***                                        |||
+| `age`                 | chr  | Subject's self-reported age group. Values include `18-24`, `25-34`, `35-44`, `45-54`, `55-64`, and `65+`. |    
+| `workStatus`          | chr  | Subject's self-reported work status. Values include `Faculty`, `Graduate Student`, and `Staff`. |
+| `facultyDummy`        | num  | *engineered variable* A binary indicator (0 for no, 1 for yes) of whether the subject is faculty.  |           
+| `staffDummy`          | num  | *engineered variable* A binary indicator (0 for no, 1 for yes) of whether the subject is staff.  | 
+| ***Demographic questions***                                                ||| 
+| `gender`              | chr  | Subject's self-reported gender. Values include `Man`, `Woman`, `Non-Binary`, `Transgender`, and |
+|                       |      | `Another Gender Identity Not Listed`.         |                  
+| `race_1`              | chr  | An indicator of whether the subject is *White*. Empty values indicate this race doesn't apply. |               
+| `race_2`              | chr  | An indicator of whether the subject is *Black or African American*. Empty values indicate this race doesn't |
+|                       |      | apply.                                        |                  
+| `race_3`              | chr  | An indicator of whether the subject is *Hispanic or Latinx*. Empty values indicate this race doesn't apply. |  
+| `race_9`              | chr  | An indicator of whether the subject is *Asian*. Empty values indicate this race doesn't apply. |              
+| `race_10`             | chr  | An indicator of whether the subject is *American Indian or Alaska Native*. Empty values indicate this race |
+|                       |      | doesn't apply.                                |                 
+| `race_11`             | chr  | An indicator of whether the subject is *Native Hawaiian or Pacific Islander*. Empty values indicate this |
+|                       |      | race doesn't apply.                           |     
+| `race_12`             | chr  | An indicator of whether the subject chose *User Specified* for the race question. Empty values indicate this |
+|                       |      | race doesn't apply.                           |                 
+| `race_12_TEXT`        | chr  | Subject's user-specified answer for the race question if chose *User Specified*. |    
+| `race_13`             | chr  | An indicator of whether the subject chose *Prefer not to answer* the race question. Empty values indicate |
+|                       |      | this answer doesn't apply.                    |          
+| `income`              | chr  | A categorical variable of the subject's household income in 2021. Values include `$100,000 - $119,999`, |
+|                       |      | `$120,000 - $139,999`, `$140,000 - $149,999`, `$150,000 or more`, `$20,000 - $39,999`, `$40,000 - $59,999`, |
+|                       |      | `$60,000 - $79,999`, `$80,000 - $99,999`, and `Less than $20,000`.  | 
+| `childrenDependents`  | chr  | A binary indicator (`Yes` or `No`) of whether the subject have children under the age of 18 or adult |
+|                       |      | dependents living in the household.           |      
+| `schoolDivision`      | chr  | A categorical variable of the subject's primary affiliation at Penn. Values include major schools and |
+|                       |      | divisions at Penn.                            |          
+| `schoolDivision_25_TEXT` | chr  | A string of subject's user-specified answer for the `schoolDivision` question if the choices don't apply. |
+| `medSchoolDummy`      | num  | *engineered variable* A binary indicator (0 for no, 1 for yes) of whether the subject is affiliated to |
+|                       |      | Perelman School of Medicine.                  | 
+| ***Commuter behavior questions***                                          |||
+| `odtest`              | chr  | GPS latitude and longitude pairs of subject's approximate origin (home) and destination (work) locations of |
+|                       |      | their current commute. Collected from markers on the interactive map or geocoded based on street address  |
+|                       |      | type-ins.   |                 
+| `originlat`           | num  | *engineered variable* To calculate travel distance and time by different mode from the subject's origin to |
+|                       |      | destination, we extract the latitude of trip origin from `odtest`.   |               
+| `originlon`           | num  | *engineered variable* To calculate travel distance and time by different mode from the subject's origin to |
+|                       |      | destination, we extract the longitude of trip origin from `odtest`.   | 
+| `destinlat`           | num  | *engineered variable* To calculate travel distance and time by different mode from the subject's origin to |
+|                       |      | destination, we extract the latitude of trip destination from `odtest`.    |                
+| `destinlon`           | num  | *engineered variable* To calculate travel distance and time by different mode from the subject's origin to |
+|                       |      | destination, we extract the longitude of trip destination from `odtest`.   |
+| `dest_lat`            | chr  | *engineered variable* Latitude (string) of trip destination from `odtest`. |               
+| `dest_long`           | chr  | *engineered variable* Longitude (string) of trip destination from `odtest`. | 
+| `distance_transit`    | num  | *engineered variable* Travel distance (miles) by public transit from the subject's origin to destination |
+|                       |      | calculated using Google Maps API.   |        
+| `duration_transit`    | num  | *engineered variable* Travel duration (minutes) by public transit from the subject's origin to destination |
+|                       |      | calculated using Google Maps API.   |        
+| `distance_driving`    | num  | *engineered variable* Travel distance (miles) by driving from the subject's origin to destination calculated |
+|                       |      | using Google Maps API.   |        
+| `duration_driving`    | num  | *engineered variable* Travel duration (minutes) by driving from the subject's origin to destination  |
+|                       |      | calculated using Google Maps API.   |       
+| `distance_walking`    | num  | *engineered variable* Travel distance (miles) by walking from the subject's origin to destination calculated |
+|                       |      | using Google Maps API.   |        
+| `duration_walking`    | num  | *engineered variable* Travel duration (minutes) by walking from the subject's origin to destination |
+|                       |      | calculated using Google Maps API.   |  
+| `od_unli`             | chr  | *engineered variable* Cleaned GPS latitude and longitude pairs of subject's approximate origin (home) and |
+|                       |      | destination (work) locations of their current commute based on `odtest`.   |                
+| `total_trips_old`     | num  | Number of days the subject commuted to campus in the past week. Ranging from 0 to 7.  | 
+| `commuteCampus_1`     | chr  | *engineered variable* Corrected number of days the subject commuted to campus in the past week based on |
+|                       |      | `modeChoice_old` inputs: total commuting days <= total days reported for all modes and <= 7. Ranging from 0 |
+|                       |      | to 7.   | 
+| `commute_days`        | num  | *engineered variable* Numeric value of `commuteCampus_1`. |   
+| `modeChoice_1old`     | chr  | Number of days the subject reported *driving alone* to commute to campus in the past week. Ranging from 0 to 
+|                       |      | 7. ^|
+| `modeChoice_2old`     | chr  | Number of days the subject reported using *public transit* to commute to campus in the past week. Ranging |
+|                       |      | from 0 to 7.   |
+| `modeChoice_3old`     | chr  | Number of days the subject reported *walking* to commute to campus in the past week. Ranging from 0 to 7.  | 
+| `modeChoice_4old`     | chr  | Number of days the subject reported riding *bicycle* to commute to campus in the past week. Ranging from 0 |
+|                       |      | to 7.  | 
+| `modeChoice_5old`     | chr  | Number of days the subject reported *carpooling as driver* to commute to campus in the past week. Ranging |
+|                       |      | from 0 to 7.   |
+| `modeChoice_6old`     | chr  | Number of days the subject reported *carpooling as rider* to commute to campus in the past week. Ranging from |
+|                       |      | 0 to 7.   | 
+| `modeChoice_7old`     | chr  | Number of days the subject reported *vanpooling* to commute to campus in the past week. Ranging from 0 to 7. |
+| `modeChoice_8old`     | chr  | Number of days the subject reported using *Penn transit* to commute to campus in the past week. Ranging from |
+|                       |      | 0 to 7.  |
+| `modeChoice_9old`     | chr  | Number of days the subject reported using *rideshare* to commute to campus in the past week. Ranging from 0 |
+|                       |      | to 7.  | 
+| `modeChoice_10old`    | chr  | Number of days the subject reported using *other mobility device (hoverboard, scooter, etc.)* to commute to |
+|                       |      | campus in the past week. Ranging from 0 to 7.   | 
+| `modeChoice_1`        | chr  | *engineered variable* Number of days the subject used *driving alone* as the "main mode" of transportation  |
+|                       |      | to commute to campus in the past week. Ranging from 0 to 7.  |             
+| `modeChoice_2`        | chr  | *engineered variable* Number of days the subject used *public transit* as the "main mode" of transportation |
+|                       |      | to commute to campus in the past week. Ranging from 0 to 7.   |            
+| `modeChoice_3`        | chr  | *engineered variable* Number of days the subject used *walking* as the "main mode" of transportation to |
+|                       |      | commute to campus in the past week. Ranging from 0 to 7.   |             
+| `modeChoice_4`        | chr  | *engineered variable* Number of days the subject used *bicycle* as the "main mode" of transportation to |
+|                       |      | commute to campus in the past week. Ranging from 0 to 7.   |             
+| `modeChoice_5`        | chr  | *engineered variable* Number of days the subject used *carpooling as driver* as the "main mode" of |
+|                       |      | transportation to commute to campus in the past week. Ranging from 0 to 7.   |             
+| `modeChoice_6`        | chr  | *engineered variable* Number of days the subject used *carpooling as rider* as the "main mode" of  |
+|                       |      | transportation to commute to campus in the past week. Ranging from 0 to 7.   |            
+| `modeChoice_7`        | chr  | *engineered variable* Number of days the subject used *vanpool* as the "main mode" of transportation to |
+|                       |      | commute to campus in the past week. Ranging from 0 to 7.   |             
+| `modeChoice_8`        | chr  | *engineered variable* Number of days the subject used *Penn transit* as the "main mode" of transportation |
+|                       |      | to commute to campus in the past week. Ranging from 0 to 7.   |             
+| `modeChoice_9`        | chr  | *engineered variable* Number of days the subject used *rideshare* as the "main mode" of transportation to |
+|                       |      | commute to campus in the past week. Ranging from 0 to 7.   |             
+| `modeChoice_10`       | chr  | *engineered variable* Number of days the subject used *other mobility device (hoverboard, scooter, etc.)* as |
+|                       |      | the "main mode" of transportation to commute to campus in the past week. Ranging from 0 to 7.   |  
+| `num_mode`            | num  | *engineered variable* Number of transportation modes (main mode) used to commute to campus in a week. |
+|                       |      | Ranging from 0 to 4.  |      
+| `driveAloneDummy`     | num  | *engineered variable* A binary indicator (0 for no, 1 for yes) of whether the subject use *driving alone* |
+|                       |      | as the "main mode" of transportation to commute 3 or more days per week.    |         
+| `takeTransitDummy`    | num  | *engineered variable* A binary indicator (0 for no, 1 for yes) of whether the subject use *public transit* |
+|                       |      | as the "main mode" of transportation to commute 3 or more days per week.    |       
+| `walkingDummy`        | num  | *engineered variable* A binary indicator (0 for no, 1 for yes) of whether the subject use *walking* as the |
+|                       |      | "main mode" of transportation to commute 3 or more days per week.    |            
+| `bikingDummy`         | num  | *engineered variable* A binary indicator (0 for no, 1 for yes) of whether the subject use *bicycle* as the |
+|                       |      | "main mode" of transportation to commute 3 or more days per week.    |             
+| `carpoolDummy`        | num  | *engineered variable* A binary indicator (0 for no, 1 for yes) of whether the subject use *rishare* (either |
+|                       |      | as driver or rider) as the "main mode" of transportation to commute at least one day per week.   |       
+| `arrivalTime`         | chr  | A categorical variable of the time that the subject aims to arrive on campus on a typical workday. Values |
+|                       |      | include `Prior to 6AM`, `6:00-8:00 AM`, `8:00-10:00 AM`, `10:00-12:00 PM`, `12:00 - 2:00 PM`,    |
+|                       |      | `2:00 - 4:00 PM`, `4:00 - 6:00 PM`, `6 PM or later`, and `I have no set arrival time`.  |          
+| `totalHours`          | chr  | Total hours that the subject worked on campus in the last week. Values include `0-10 hours`, `11-20 hours`, |
+|                       |      | `21-30 hours`, `31-40 hours`, and `More than 40 hours`.  |               
+| `commuterProgramsHear_1` | chr  | An indicator of whether the subject has heard of the *Occasional Parking Program*. Empty values indicate |
+|                          |      | not heard.  |  
+| `commuterProgramsHear_2` | chr  | An indicator of whether the subject has heard of the *WageWorks Commuter Parking Card*. Empty values |
+|                          |      | indicate not heard.    | 
+| `commuterProgramsHear_3` | chr  | An indicator of whether the subject has heard of the *WageWorks Commuter Card*. Empty values indicate not |
+|                          |      | heard.   | 
+| `commuterProgramsHear_4` | chr  | An indicator of whether the subject has heard of the *PATCO Freedom Card*. Empty values indicate not heard.|
+| `commuterProgramsHear_5` | chr  | An indicator of whether the subject has heard of the *Bike Commuter Reimbursement Program*. Empty values |
+|                          |      | indicate not heard.    |  
+| `commuterProgramsHear_6` | chr  | An indicator of whether the subject has heard of the *Monthly Parking Permit*. Empty values indicate not |
+|                          |      | heard.    |  
+| `commuterProgramsHear_9` | chr  | An indicator of whether the subject has heard of the *Carpool program*. Empty values indicate not heard.  | 
+| `commuterProgramsHear_53`| chr  | An indicator of whether the subject has heard of the *Vanpool program*. Empty values indicate not heard.  |
+| `commuterProgramsPart_1` | chr  | An indicator of whether the subject has participated in the *Occasional Parking Program*. Empty values   |
+|                          |      | indicate not participated.     | 
+| `commuterProgramsPart_2` | chr  | An indicator of whether the subject has participated in the *WageWorks Commuter Parking Card*. Empty values |
+|                          |      | indicate not participated.     | 
+| `commuterProgramsPart_3` | chr  | An indicator of whether the subject has participated in the *WageWorks Commuter Card*. Empty values |
+|                          |      | indicate not participated.     |  
+| `commuterProgramsPart_4` | chr  | An indicator of whether the subject has participated in the *PATCO Freedom Card*. Empty values indicate  |
+|                          |      | not participated.     |  
+| `commuterProgramsPart_5` | chr  | An indicator of whether the subject has participated in the *Bike Commuter Reimbursement Program*. Empty |
+|                          |      | values indicate not participated.     |  
+| `commuterProgramsPart_6` | chr  | An indicator of whether the subject has participated in the *Monthly Parking Permit*. Empty values |
+|                          |      | indicate not participated.       |  
+| `commuterProgramsPart_9` | chr  | An indicator of whether the subject has participated in the *Carpool program*. Empty values indicate not |
+|                          |      | participated.       |  
+| `commuterProgramsPart_53`| chr  | An indicator of whether the subject has participated in the *Vanpool program*. Empty values indicate not |
+|                          |      | participated.       | 
+| `reasonabilyUtilize_1`   | chr  | An indicator of whether the subject can reasonably use *Personal car* to get to work. Empty values |
+|                          |      | indicate cannot.    |   
+| `reasonabilyUtilize_2`   | chr  | An indicator of whether the subject can reasonably use *Public Transit* to get to work. Empty values |
+|                          |      | indicate cannot.    |
+| `reasonabilyUtilize_3`   | chr  | An indicator of whether the subject can reasonably *Walk* to get to work. Empty values indicate cannot. | 
+| `reasonabilyUtilize_4`   | chr  | An indicator of whether the subject can reasonably use *Bike* to get to work. Empty values indicate cannot.|
+| `reasonabilyUtilize_5`   | chr  | An indicator of whether the subject can reasonably *Carpool* to get to work. Empty values indicate cannot. |
+| `reasonabilyUtilize_6`   | chr  | An indicator of whether the subject can reasonably use *Rideshare or taxi* to get to work. Empty values |
+|                          |      | indicate cannot.    | 
+| `reasonabilyUtilize_7`   | chr  | An indicator of whether the subject can reasonably *Vanpool* to get to work. Empty values indicate cannot. |
+| `reasonabilyUtilize_8`   | chr  | An indicator of whether the subject can reasonably use *Other mobility device (Scooter, Hoverboard, etc.)* |
+|                          |      | to get to work. Empty values indicate cannot.    |    
+| `whyBike_1`           | chr  | An indicator of whether the subject was kept from using a *bicycle* for commuting trips in the last week was |
+|                       |      | because of "I don't own a bicycle." Empty values indicate the reason didn't apply.   |               
+| `whyBike_2`           | chr  | An indicator of whether the subject was kept from using a *bicycle* for commuting trips in the last week was |
+|                       |      | because of "I believe it's unsafe." Empty values indicate the reason didn't apply.   |               
+| `whyBike_3`           | chr  | An indicator of whether the subject was kept from using a *bicycle* for commuting trips in the last week was |
+|                       |      | because of "Accessibility issues." Empty values indicate the reason didn't apply.    |              
+| `whyBike_5`           | chr  | An indicator of whether the subject was kept from using a *bicycle* for commuting trips in the last week was |
+|                       |      | because of "Takes too long." Empty values indicate the reason didn't apply.    |              
+| `whyBike_6`           | chr  | An indicator of whether the subject was kept from using a *bicycle* for commuting trips in the last week was |
+|                       |      | because of "Weather." Empty values indicate the reason didn't apply.           |               
+| `whyBike_7`           | chr  | An indicator of whether the subject was kept from using a *bicycle* for commuting trips in the last week was |
+|                       |      | because of "I can't park my bike." Empty values indicate the reason didn't apply.   |              
+| `whyBike_8`           | chr  | An indicator of whether the subject was kept from using a *bicycle* for commuting trips in the last week was |
+|                       |      | because of "I can't carry my work materials." Empty values indicate the reason didn't apply.       |         
+| `whyBike_9`           | chr  | An indicator of whether the subject was kept from using a *bicycle* for commuting trips in the last week was |
+|                       |      | because of "I have to bring a change of clothes." Empty values indicate the reason didn't apply.   |          
+| `whyBike_10`          | chr  | An indicator of whether the subject was kept from using a *bicycle* for commuting trips in the last week was |
+|                       |      | because of "I prefer my current type of transportation." Empty values indicate the reason didn't apply.   |    
+| `whyWalk_1`           | chr  | An indicator of whether the subject was kept from *walking* for commuting trips in the last week was because |
+|                       |      | of "It doesn’t seem safe." Empty values indicate the reason didn't apply.   |               
+| `whyWalk_2`           | chr  | An indicator of whether the subject was kept from *walking* for commuting trips in the last week was because |
+|                       |      | of "Accessibility issues." Empty values indicate the reason didn't apply.   |               
+| `whyWalk_4`           | chr  | An indicator of whether the subject was kept from *walking* for commuting trips in the last week was because |
+|                       |      | of "Takes too long." Empty values indicate the reason didn't apply.   |               
+| `whyWalk_5`           | chr  | An indicator of whether the subject was kept from *walking* for commuting trips in the last week was because |
+|                       |      | of "Weather." Empty values indicate the reason didn't apply.          |              
+| `whyWalk_6`           | chr  | An indicator of whether the subject was kept from *walking* for commuting trips in the last week was because |
+|                       |      | of "I can't carry my work materials." Empty values indicate the reason didn't apply.   |               
+| `whyWalk_7`           | chr  | An indicator of whether the subject was kept from *walking* for commuting trips in the last week was because |
+|                       |      | of "I prefer my current type of transportation." Empty values indicate the reason didn't apply.   |           
+| `whyCarpool_1`        | chr  | An indicator of whether the subject was kept from *carpooling* for commuting trips in the last week was |
+|                       |      | because of "Not compatible with my schedule." Empty values indicate the reason didn't apply.      |            
+| `whyCarpool_2`        | chr  | An indicator of whether the subject was kept from *carpooling* for commuting trips in the last week was |
+|                       |      | because of "Too expensive." Empty values indicate the reason didn't apply.    |             
+| `whyCarpool_3`        | chr  | An indicator of whether the subject was kept from *carpooling* for commuting trips in the last week was |
+|                       |      | because of "Takes too long." Empty values indicate the reason didn't apply.   |            
+| `whyCarpool_4`        | chr  | An indicator of whether the subject was kept from *carpooling* for commuting trips in the last week was |
+|                       |      | because of "Need a car before or after work." Empty values indicate the reason didn't apply.   |             
+| `whyCarpool_5`        | chr  | An indicator of whether the subject was kept from *carpooling* for commuting trips in the last week was |
+|                       |      | because of "Don't know how to find a carpool partner." Empty values indicate the reason didn't apply.   |     
+| `whyCarpool_6`        | chr  | An indicator of whether the subject was kept from *carpooling* for commuting trips in the last week was |
+|                       |      | because of "I live too close to work." Empty values indicate the reason didn't apply.   |             
+| `whyCarpool_7`        | chr  | An indicator of whether the subject was kept from *carpooling* for commuting trips in the last week was |
+|                       |      | because of "I prefer my current type of transportation." Empty values indicate the reason didn't apply. |   
+| `whyVanpool_1`        | chr  | An indicator of whether the subject was kept from *varpool* for commuting trips in the last week was because |
+|                       |      | of "Not compatible with my schedule." Empty values indicate the reason didn't apply.    |            
+| `whyVanpool_2`        | chr  | An indicator of whether the subject was kept from *varpool* for commuting trips in the last week was because |
+|                       |      | of "Too expensive." Empty values indicate the reason didn't apply.    |             
+| `whyVanpool_3`        | chr  | An indicator of whether the subject was kept from *varpool* for commuting trips in the last week was because |
+|                       |      | of "Takes too long." Empty values indicate the reason didn't apply.   |             
+| `whyVanpool_4`        | chr  | An indicator of whether the subject was kept from *varpool* for commuting trips in the last week was because |
+|                       |      | of "Need a car before or after work." Empty values indicate the reason didn't apply.    |             
+| `whyVanpool_5`        | chr  | An indicator of whether the subject was kept from *varpool* for commuting trips in the last week was because |
+|                       |      | of "I live too close to work." Empty values indicate the reason didn't apply.           |             
+| `whyVanpool_6`        | chr  | An indicator of whether the subject was kept from *varpool* for commuting trips in the last week was because |
+|                       |      | of "I prefer my current type of transportation." Empty values indicate the reason didn't apply.   |            
+| `whyTransit_1`        | chr  | An indicator of whether the subject was kept from using *public transit* for commuting trips in the last |
+|                       |      | week was because of "Not compatible with my schedule." Empty values indicate the reason didn't apply.    |     
+| `whyTransit_2`        | chr  | An indicator of whether the subject was kept from using *public transit* for commuting trips in the last week |
+|                       |      | was because of "Too expensive." Empty values indicate the reason didn't apply.    |             
+| `whyTransit_3`        | chr  | An indicator of whether the subject was kept from using *public transit* for commuting trips in the last week | |                       |      | was because of "Takes too long." Empty values indicate the reason didn't apply.    |             
+| `whyTransit_4`        | chr  | An indicator of whether the subject was kept from using *public transit* for commuting trips in the last week |
+|                       |      | was because of "Need a car before or after work." Empty values indicate the reason didn't apply.    |          
+| `whyTransit_6`        | chr  | An indicator of whether the subject was kept from using *public transit* for commuting trips in the last week |
+|                       |      | was because of "Would have to transfer." Empty values indicate the reason didn't apply.      |            
+| `whyTransit_7`        | chr  | An indicator of whether the subject was kept from using *public transit* for commuting trips in the last week |
+|                       |      | was because of "I live too close to work." Empty values indicate the reason didn't apply.    |             
+| `whyTransit_8`        | chr  | An indicator of whether the subject was kept from using *public transit* for commuting trips in the last week |
+|                       |      | was because of "I prefer my current type of transportation." Empty values indicate the reason didn't apply.   |
+| `whyTransit_9`        | chr  | An indicator of whether the subject was kept from using *public transit* for commuting trips in the last week |
+|                       |      | was because of "It doesn't seem clean." Empty values indicate the reason didn't apply.    |             
+| `whyTransit_10`       | chr  | An indicator of whether the subject was kept from using *public transit* for commuting trips in the last week |
+|                       |      | was because of "It doesn't seem safe." Empty values indicate the reason didn't apply.     |  
+| `scenarioBikeWalkDr`  | chr  | In a scenario where the subject is commuting to campus five days per week, the transportation plan that the |
+|                       |      | subject would prefer among the given options (trading off between driving and biking/walking). Options  |
+|                       |      | include `Drive alone to work every day. Pay $210 monthly cost via payroll pre-tax exemption for parking.`,  |
+|                       |      | `Walk or bike more than three days per week. Drive or take transit as needed. Parking costs $17 per day.`,  |
+|                       |      | and empty value (no response).  |     
+| `scenarioCarpoolD`    | chr  | In a scenario where the subject is commuting to campus five days per week, the transportation plan that the |
+|                       |      | subject would prefer among the given options (trading off between driving and carpooling). Options include  |
+|                       |      | `Drive alone to work every day. Pay $210 monthly cost via payroll pre-tax deduction for parking.`,  |
+|                       |      | `Carpool to work every day with one other person. Pay approximately $80 monthly cost via payroll pre-tax` |
+|                       |      | `exemption for parking.`, and empty value (no response).   |        
+| `scenarioTransitD`    | chr  | In a scenario where the subject is commuting to campus five days per week, the transportation plan that the |
+|                       |      | subject would prefer among the given options (trading off between driving and taking transit). Options  |
+|                       |      | include `Drive alone to work every day. Pay $210 monthly cost via payroll pre-tax deduction for parking.`,  |
+|                       |      | `Drive alone three days a week. Take public transit two days a week. Pay $210 for monthly parking`   |
+|                       |      | `Pay for transit fare. Both together are eligible for upto $280 monthly payroll pre-tax exemption.`, and    |
+|                       |      | empty value (no response).  |        
+| `scenarioBikeWalkTr`  | chr  | In a scenario where the subject is commuting to campus five days per week, the transportation plan that the |
+|                       |      | subject would prefer among the given options (trading off between biking/walking and taking transit).  |
+|                       |      | Options include `Take public transit three days per week. Walk or bike two days per week. Pay for`  |
+|                       |      | `monthly transit fare up to $280 via payroll pre-tax deduction.`, `Walk or bike three days per week.`  |
+|                       |      | `Take public transit two days per week. Pay for transit fare. Receive $20/month in bicycle expenses.`, and  |
+|                       |      | empty value (no response).   |  
+| ***Environmental awareness questions***                                    |||
+| `envImpact_1`         | chr  | A categorical variable of the subject's attitude towards the first environmental impact question - "It is   |
+|                       |      | important to me to reduce the environmental impact of my travel to work." Values include `Strongly Agree`,  |
+|                       |      | `Agree`, `Neither agree nor disagree`, `Disagree`, and `Strongly disagree`. Empty value means no response.  | 
+| `envImpact_1_dummy`   | chr  | *engineered variable* For analysis purpose, `envImpact_1` is re-categorized into two categories: `Agree` or |
+|                       |      | `Disagree or Nuetral`.   |      
+| `envImpact_2`         | chr  | A categorical variable of the subject's attitude towards the second environmental impact question - "I think |
+|                       |      | it's worth some personal inconvenience to reduce the environmental impact of my travel to work." Values  |
+|                       |      | include `Strongly Agree`, `Agree`, `Neither agree nor disagree`, `Disagree`, and `Strongly disagree`.    |
+|                       |      | Empty value means no response.   |   
+| `envImpact_2_dummy`   | chr  | *engineered variable* For analysis purpose, `envImpact_1` is re-categorized into two categories: `Agree` or |
+|                       |      | `Disagree or Nuetral`.   | 
+| ***Electrical vehicles questions***                                        |||
+| `evUse`               | chr  | A categorical variable indicating whether the subject own or consider buying an electric vehicle. Values |
+|                       |      | include `Own`, `Considering`, `Not considering an electric vehicle`, and empty value (no response).      |    
+| `evDemand`            | chr  | A categorical variable indicating whether there are enough electric vehicle charging stations near their |
+|                       |      | workplace. Values include `Yes`, `No`, `Not sure`, and empty value (no response).   |            
+| ***Long-distance travel questions***                                       |||
+| `longdistTripsCompare_1` | chr  | Approximate number of trips between *100-249 miles [ex. Washington, DC]* that the subject anticipates |
+|                          |      | taking for work in the current academic year. Values include `0 trips`, `1-2 trips`, `3-4 trips`,     |
+|                          |      | `5 or more`, and empty value (no response).  |  
+| `longdistTripsCompare_2` | chr  | Approximate number of trips between *250-374 miles [ex. Pittsburgh]* that the subject anticipates taking |
+|                          |      | for work in the current academic year. Values include `0 trips`, `1-2 trips`, `3-4 trips`, `5 or more`,  |
+|                          |      | and empty value (no response).    | 
+| `longdistTripsCompare_3` | chr  | Approximate number of trips between *375-499 miles [ex. Columbus, OH]* that the subject anticipates |
+|                          |      | taking for work in the current academic year. Values include `0 trips`, `1-2 trips`, `3-4 trips`,   |
+|                          |      | `5 or more`, and empty value (no response).    |  
+| `longdistTripsCompare_4` | chr  | Approximate number of trips between *More than 500 miles [ex. Houston, TX]* that the subject anticipates |
+|                          |      | taking for work in the current academic year. Values include `0 trips`, `1-2 trips`, `3-4 trips`,   |
+|                          |      | `5 or more`, and empty value (no response).   |
+| `longdistTripsNYC`       | chr  | In a scenario where the subject has to choose a travel itinerary for a work trip overnight to *New York* |
+|                          |      | *City*, traveling alone and beginning from home, the travel itinerary that the subject prefers most among |
+|                          |      | the given options. Options include `Take a taxi or use rideshare to get to PHL, fly to LaGuardia`,  |
+|                          |      | `Take SEPTA to PHL, fly to LaGuardia`, `Drive to PHL, fly to LaGuardia`,  |
+|                          |      | `Take a taxi or use rideshare to get to 30th St. Station, take Amtrak to New York Penn Station`,  |
+|                          |      | `Take SEPTA to 30th St. Station, take Amtrak to New York Penn Station`,   |
+|                          |      | `Take SEPTA to 30th St. Station, take Megabus to midtown Manhattan`,      |
+|                          |      | `Drive to New York City and park overnight`, and empty value (no response).   |   
+| `longdistTripsBos`       | chr  | In a scenario where the subject has to choose a travel itinerary for a work trip overnight to *Boston*,|
+|                          |      | traveling alone and beginning from home, the travel itinerary that the subject prefers most among the  |
+|                          |      | given options. Options include `Take a taxi or use rideshare to get to PHL, fly to Boston`,  |
+|                          |      | `Take SEPTA to PHL, fly to Boston Logan`, `Drive to PHL, fly to Boston Logan`,  |
+|                          |      | `Take a taxi or use rideshare to get to 30th St. Station, take Amtrak to Boston`,  |
+|                          |      | `Take SEPTA to 30th St. Station, take Amtrak to Boston`,  |
+|                          |      | `Take SEPTA to 30th St. Station, take Megabus to Boston`, `Drive to Boston and park overnight`, and   |
+|                          |      | empty value (no response).    |        
+| `longdistTripsPitt`      | chr  | In a scenario where the subject has to choose a travel itinerary for a work trip overnight to |
+|                          |      | *Pittsburgh*, traveling alone and beginning from home, the travel itinerary that the subject prefers  |
+|                          |      | most among the given options. Options include  |
+|                          |      | `Take a taxi or use rideshare to get to PHL, fly to Pittsburgh`, `Take SEPTA to PHL, fly to Pittsburgh`, |
+|                          |      | `Drive to PHL, fly to Pittsburgh`,  |
+|                          |      | `Take a taxi or use rideshare to get to 30th St. Station, take Amtrak to Pittsburgh`,  |
+|                          |      | `Take SEPTA to 30th St. Station, take Amtrak to Pittsburgh`,  |
+|                          |      | `Take SEPTA to 30th St. Station, take Megabus to Pittsburgh`, `Drive to Pittsburgh and park overnight`,  |
+|                          |      | and empty value (no response).    |      
+| `longdistTripsDriveRe_1` | chr  | Degree to which the subject agree to the statement that "It's hard to access the airport or the train    |
+|                          |      | station nearest to my home" so that I drive for long-distance trips (if selected driving in the above    |
+|                          |      | long-distance travel questions). Values include `Strongly Agree`, `Agree`, `Neither agree nor disagree`, |
+|                          |      | `Disagree`, `Strongly disagree`, and empty values (no response).    |  
+| `longdistTripsDriveRe_2` | chr  | Degree to which the subject agree to the statement that "I like driving, it's convenient" so that I drive |
+|                          |      | for long-distance trips (if selected driving in the above long-distance travel questions). Values include |
+|                          |      | `Strongly Agree`, `Agree`, `Neither agree nor disagree`, `Disagree`, `Strongly disagree`, and empty      |
+|                          |      | values (no response).     |  
+| `longdistTripsFlyReas_1` | chr  | Degree to which the subject agree to the statement that "I like flying, it's fast and efficient" so that |
+|                          |      | I fly for long-distance trips (if selected flying in the above long-distance travel questions). Values   |
+|                          |      | include `Strongly Agree`, `Agree`, `Neither agree nor disagree`, `Disagree`, `Strongly disagree`, and    |
+|                          |      | empty values (no response).  |  
+| `longdistTripsFlyReas_2` | chr  | Degree to which the subject agree to the statement that "I'd prefer to take the train but it's slower"   |
+|                          |      | so that I fly for long-distance trips (if selected flying in the above long-distance travel questions).  |
+|                          |      | Values include `Strongly Agree`, `Agree`, `Neither agree nor disagree`, `Disagree`, `Strongly disagree`, |
+|                          |      | and empty values (no response).     |  
+| `longdistTripsFlyReas_3` | chr  | Degree to which the subject agree to the statement that "If I'm going up and down the Northeast Corridor, |
+|                          |      | I still fly because it's easier than taking the train or the bus" so that I fly for long-distance trips   |
+|                          |      | (if selected flying in the above long-distance travel questions). Values include `Strongly Agree`,        |
+|                          |      | `Agree`, `Neither agree nor disagree`, `Disagree`, `Strongly disagree`, and empty values (no response).   | 
+
+          
+      
+

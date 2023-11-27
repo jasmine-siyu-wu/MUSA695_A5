@@ -1,5 +1,6 @@
 ---
-title: "Driving Towards Equity: Uncovering and Overcoming Hidden Roadblocks in Youth Driver Education"
+title: "Driving Towards Equity"
+subtitle: "A Call to Action for State BMVs to Uncover and Overcome Hidden Roadblocks in Youth Driver Education"
 author: "Jasmine Siyu Wu"
 date: "11/28/2023"
 output:
@@ -39,61 +40,90 @@ options(scipen=1)  #999
 ```
 
 
-In the heart of Columbus, Ohio, a tale of two realities unfolds. It's a story that mirrors the national struggle for equitable access to vital resources, but with a unique twist: here, the resource in question is driver education, a critical milestone in a teenager's journey to adulthood.
+
+![Teenage driver taking the on-road exam of getting a driver's license. Image source: Gounaris Abbound.](https://www.gafirm.com/wp-content/uploads/2021/09/teen-driving-laws-ohio-1024x576.jpg)
+
+<br>
+
+In the diverse landscape of Columbus, Ohio, a critical yet often overlooked story is unfolding - one that sheds light on a national concern: the stark disparities in driver education and training access among teens. Like in Ohio, the key to transportation accessibility for teens in many states in the United States, particularly for adolescents transitioning to adulthood, is not just the presence of roads but also the access to driver education and training. In an era where motor vehicle crashes are a leading cause of death among U.S. teens, with young drivers overrepresented in fatal crashes, the quest for a driver's license is more than a rite of passage; it is a safety imperative. This narrative, grounded in a series of comprehensive research, serves as a clarion call to the Bureau of Motor Vehicles (BMVs) in other states to recognize similar patterns within their jurisdictions, gather comprehensive data, and implement targeted policy interventions.
+
+<br>
+
+Figure 1. Ohio MSA boundary, Ohio boundary, driving centers, and population distribution by Census tract (interactive)
+
+<br>
+
+Ohio, like all states in the U.S., has implemented [Graduated Driver Licensing (GDL)](https://www.iihs.org/topics/teenagers/graduated-licensing-laws-table) strategies, requiring teens under 18 to undergo a series of training and preparation steps before obtaining a license. These steps include hours of in-classroom lectures, Behind-the-Wheel (BTW) training with licensed instructors, and supervised practice driving (with adults). For instance, [Ohio's GDL laws](https://odh.ohio.gov/know-our-programs/child-injury-Prevention/teen-driving#:~:text=Ohio's%20GDL%20Law%20has%20three,and%20Full%20License%2FNo%20Restrictions.&text=At%20age%2015%20years%20and,have%20earned%20their%20learner's%20permit.) require that a teen under 18 must engage in a minimum of 8 hours of BTW instruction with a licensed instructor, which cost between $449-529, in addition to lectures. Teens unable to access driver training might forgo opportunities or drive unlicensed. 
+
+<br>
+
+Figure 2. a graph of GDL laws in Ohio
+
+<br>
+
+A comprehensive study by Dong et al.^[Dong, Xiaoxia, Jasmine Siyu Wu, Shane T. Jensen, Elizabeth A. Walshe, Flaura K. Winston, & Megan S. Ryerson (2023). "Financial status and travel time to driving schools as barriers to obtaining a young driver license in a state with comprehensive young driver licensing policy." Accident Analysis & Prevention 191 (2023): 107198, DOI: 10.1016/j.aap.2023.107198.], encompassing over 35,000 Ohio young drivers from the Columbus Metropolitan Statistical Area (MSA), sheds light on the disparities in access to driver training (DT) and young driver licensure (before 18 years old). This area, home to 2.1 million residents, is heavily auto-dependent, with 80% of workers commuting by car.
+
+<br>
+
+Figure 3. an info graphic of Columbus MSA
+
+<br>
+
+The study, which matches licensing data with Census tract-level socioeconomic characteristics, highlights a stark divide: teens in wealthier Census tracts are up to four times as likely to complete DT and gain a young driver's license compared to their peers in lower-income tracts. The probability of completing DT and gaining a license in high-income tracts is over 50%, while it dips below 30% in the lowest-income tracts.
 
 
-Amidst the bustling streets and quiet suburbs of Columbus, the disparity in driver education access casts a long shadow over the aspirations of its youth. In some areas, driving schools dot the landscape, offering easy access to teens eager to learn. Yet, in others, particularly those marked by economic hardship, such schools are a rarity, creating what researchers have termed "Driver Training Deserts" (DTDs).
+Interestingly, the study reveals that travel time to driving schools significantly affects DT completion and licensure, especially for teens in higher-income tracts. As travel time increases, the likelihood of completing DT and gaining a license decreases by more than 15 percentage points in very high-income tracts while remaining more consistent across travel times in lower-income tracts. That is, travel time is a bigger disincentive for driver training completion and young driver licensure for teens in higher-income neighborhoods.
 
+<br>
 
-Jasmine, a bright 17-year-old from a DTD, dreams of the independence a driver’s license brings. But her path is riddled with obstacles: distant driving schools, high costs, and limited public transportation options.
-Lucas, living in a suburb flush with driver education options, represents the other side of this divide. For him, driver training is a convenient and assumed part of teenage life.
+Figure 4. Modeling result line plots
 
+<br>
 
-A groundbreaking study by Dong et al. highlights the stark reality: teens like Jasmine in DTDs have a 25% lower likelihood of receiving driver training and securing a license before 18 compared to their peers like Lucas. This isn’t just a number – it's a barrier to safety, opportunity, and equity.
+Amidst the bustling streets and quiet suburbs of Columbus, Ohio, MSA, the disparity in driver education access casts a long shadow over the aspirations of its youth - raising critical implications of driver licensure for access to employment, education, and other opportunities. While observed across socioeconomic groups, this disparity presents geospatial patterns. In some areas, driving schools dot the landscape, offering easy access to teens eager to learn. Yet, in others, particularly those marked by economic hardship, such schools are a rarity, creating what researchers have termed "Driver Training Deserts" (DTDs)^[Ryerson, Megan, Joshua Davidson, Jasmine Siyu Wu, Ilil Feiglin & Flaura Winston (2022). “Identifying community-level disparities in access to driver education and training: Toward a definition of driver training deserts.” Traffic Injury Prevention, 23:sup1, S14-S19, DOI: 10.1080/15389588.2022.2125305.].
 
+- *Jasmine*, a bright 16-year-old from a DTD, dreams of the independence a driver's license brings; however, her path is riddled with obstacles: distant driving schools, high costs, and limited public transportation options.
 
-The impact of these disparities goes beyond mere inconvenience. Ohio’s Graduated Driver Licensing laws tie safety to training, with data showing lower crash rates among those who receive early licensure following formal training. For teens in DTDs, the lack of access isn't just about mobility; it's a safety risk and a hindrance to equal opportunities in education and employment.
+- *Lucas*, living in a suburb flush with driver education options, represents the other side of this divide. For him, driver training is a convenient and assumed part of teenage life.
 
+A consequent study by Dong et al.^[Dong, Xiaoxia, Jasmine Siyu Wu, Elizabeth A. Walshe, Flaura K. Winston, and Megan S. Ryerson (2023). “Residing in a Driver Training Desert Leads to Delayed Licensure: Investigating the Relationship between Accessibility to Driver Training and Young Driver’s Licensure.” Findings, August. DOI: 10.32866/001c.85096.] highlights the stark reality: teens like Jasmine in DTDs have a 25% lower likelihood of receiving driver training and securing a license before 18 compared to their peers like Lucas. 
 
-Spatial analysis using Moran’s I tests reveals a clear geographic pattern to this divide. Suburban areas show higher access to driver training, while central urban areas, home to many low-income families, are left wanting. This is not a coincidence but a reflection of deeper socio-economic divides.
+<br>
 
+Figure 5. Cumulative distribution plot of licensure rate by DTDs and non-DTDs 
 
-Jasmine’s story is a poignant example of the broader issue. The nearest driving school is over an hour away by bus, turning what should be a routine part of teenage life into a logistical and financial challenge. This struggle is a window into the lives of many in her community, where the road to a driver’s license is an uphill battle.
+<br>
 
+The impact of these disparities goes beyond mere inconvenience. Transportation safety is tied to driver education and training, with data showing lower crash rates among those who receive early licensure following formal training^[Elizabeth A. Walshe, Daniel Romer, Abraham J. Wyner, Shukai Cheng, Michael R. Elliott, Robert Zhang, Alexander K. Gonzalez, Natalie Oppenheimer, and Flaura K. Winston. "Licensing examination and crash outcomes postlicensure in young drivers." JAMA network open 5, no. 4 (2022): e228780-e228780.]. For teens living in DTDs, the lack of access is not just about mobility; it is a safety risk and a hindrance to equal opportunities in education and employment. 
 
-Ohio’s response, the “Drive to Succeed” program, offers a glimmer of hope. Targeting teens in areas like Jasmine’s, it aims to provide scholarships for driver education, attempting to level the playing field.
+Spatial analysis using Moran's I tests reveals a clear geographic pattern to this divide. Suburban areas show higher access to driver training, while central urban areas, home to many low-income families, are left wanting. This spatial clustering is not a coincidence but a reflection of deeper socioeconomic divides.
 
+<br>
 
-But the story doesn’t end with policy. In Columbus, community groups, local businesses, and schools are beginning to collaborate, seeking ways to bring driver education to underserved areas. From mobile driving schools to subsidized training programs, the community's efforts complement the state’s initiatives, weaving a safety net of opportunity.
+Figure 6. Map of DTDs' and non-DTDs' licensure rates.
 
+<br>
 
-For Jasmine, these changes can't come soon enough. Her journey represents the collective hope of many teens in DTDs. As she nears the day when she can sit behind the wheel, her story becomes a beacon for others in her community, symbolizing a future where access to driver training is no longer a privilege, but a right.
+Jasmine's story is a poignant example of the broader issue. The nearest driving school is over an hour away by bus, turning what should be a routine part of teenage life into a logistical and financial challenge. This struggle is a window into the lives of many in her community, where the road to a driver's license is an uphill battle. 
 
+Ohio's response, the ["Drive to Succeed" program](https://governor.ohio.gov/media/news-and-media/governor-dewine-announces-teen-driver-safety-scholarship-awards-03162023), offers a glimmer of hope. Targeting teens in areas like Jasmine's, it aims to provide scholarships for driver education, attempting to level the playing field. In the Columbus MSA, the journey towards equitable driver education is just beginning. With each step forward, the city not only moves towards safer roads but also towards a future where every teen, regardless of their zip code, has the same opportunity to learn, grow, and drive toward their dreams. 
 
-In Columbus, the journey towards equitable driver education is just beginning. With each step forward, the city not only moves towards safer roads but also towards a future where every teen, regardless of their zip code, has the same opportunity to learn, grow, and drive towards their dreams.
+<br>
 
+While the Ohio government is actively exploring ways to address the disparities, this data story from Columbus is not an isolated case but a microcosm of a national issue. State BMVs across the country are urged to follow Ohio's action:
 
+- **Conduct Comprehensive Data Collection**: Similar to the partnership between Ohio BMVs and research institutions, other states should collaborate to collect and analyze data on driver education accessibility and its impact on licensure among different socioeconomic groups. Data should be both quantitative (such as the presented studies) and qualitative, as qualitative studies better comprehend people's reasons and attitudes toward GDL-required driving training.
 
+- **Identify and Address Disparities**: Utilize the data to pinpoint areas where disparities in driver education access exist. Understand teens' unique challenges in different communities, especially those in Driver Training Deserts.
 
+- **Implement Targeted Policy Interventions**: Develop and execute policies that address these disparities. This action could include offering financial assistance for driver education, subsidizing travel costs to driving schools, or establishing mobile training units to serve remote areas.
 
-Prologue:
-In the shadows of Columbus, Ohio's vibrant streets and quiet suburbs, a critical yet often overlooked story is unfolding. Here, the key to transportation accessibility, particularly for adolescents transitioning to adulthood, is not just the presence of roads, but the access to driver education. In an era where motor vehicle crashes are a leading cause of death among U.S. teens, with young drivers overrepresented in fatal crashes, the quest for a driver's license is more than a rite of passage; it's a safety imperative.
+- **Promote Equitable Access to Driver Education**: Ensure that all teens, regardless of their socioeconomic background, have equal access to the training necessary to become safe, responsible drivers.
 
-The Challenge of Graduated Driver Licensing (GDL):
-Ohio, like many states, has implemented GDL strategies, requiring teens under 18 to undergo a series of training and preparation steps before obtaining a license. These include hours of classroom instruction, behind-the-wheel training, and supervised practice driving. While GDL policies have been successful in reducing crashes among young drivers, the rates of crashes per driver and per mile driven remain alarmingly high, especially in the initial months after licensure.
+- **Monitor and Adapt Policies Over Time**: Continuously evaluate the effectiveness of these interventions and be prepared to make adjustments based on evolving data and societal needs.
 
-The Research Initiative:
-A comprehensive study by Dong et al., encompassing over 35,000 Ohio young drivers from the Columbus Metropolitan Statistical Area (MSA), sheds light on the disparities in access to driver training (DT) and licensure. This area, home to 2.1 million residents, is heavily auto-dependent, with 80% of workers commuting by car.
+<br>
 
-The Socioeconomic Divide:
-The study, which matches licensing data with Census tract-level socioeconomic characteristics, highlights a stark divide: teens in wealthier Census tracts are up to four times as likely to complete DT and gain a young driver’s license compared to their peers in lower-income tracts. The probability of completing DT and gaining a license in high-income tracts is over 50%, while it dips below 30% in the lowest-income tracts.
+As we turn our gaze from Columbus to the broader national landscape, the message is clear: equitable access to driver education is not just a local issue but a national imperative. By acknowledging and addressing these disparities, state BMVs can play a pivotal role in shaping a future where every teen, regardless of their zip code, has the opportunity to learn, grow, and navigate the roads safely and confidently.
 
-The Role of Travel Time:
-Interestingly, the study reveals that travel time to driving schools significantly affects DT completion and licensure, especially for teens in higher-income tracts. As travel time increases, the likelihood of completing DT and gaining a license decreases by more than 15 percentage points in very high-income tracts, while remaining more consistent across travel times in lower-income tracts.
-
-Implications and Future Directions:
-This disparity in driver education access raises critical questions about transportation equity and the broader implications of driver licensure for access to employment, education, and other opportunities. The findings suggest the need for policy interventions, such as subsidies for driver education, to level the playing field for lower-income teens. The Ohio BMV's "Drive to Succeed" program is a step in this direction, offering scholarships to teens who need financial support to complete DE and DT.
-
-Conclusion:
-This narrative, grounded in robust data and analysis, not only spotlights the hidden barriers to driver education in Columbus but also serves as a call to action for state and local authorities. By addressing these disparities, we can pave the way for safer roads and more equitable access to the opportunities that come with a driver's license.
 

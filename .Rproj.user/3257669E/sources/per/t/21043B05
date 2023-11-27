@@ -3,7 +3,7 @@
     "path": "C:/Users/siyuw/Documents/Fall 2023/MUSA 695/Assignments/MUSA695_A5/MUSA695_A5.rmd",
     "project_path": "MUSA695_A5.rmd",
     "type": "r_markdown",
-    "hash": "1902161637",
+    "hash": "1544580654",
     "contents": "",
     "dirty": false,
     "created": 1701060985333.0,
@@ -13,15 +13,15 @@
         "tempName": "Untitled1",
         "source_window_id": "",
         "Source": "Source",
-        "cursorPosition": "47,23",
-        "scrollLine": "56"
+        "cursorPosition": "43,70",
+        "scrollLine": "33"
     },
     "folds": "",
-    "lastKnownWriteTime": 1701061554,
+    "lastKnownWriteTime": 1701128423,
     "encoding": "UTF-8",
     "collab_server": "",
     "source_window": "",
-    "last_content_update": 1701061554262,
+    "last_content_update": 1701128423755,
     "read_only": false,
     "read_only_alternatives": []
 }
