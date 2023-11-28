@@ -27,21 +27,121 @@ library(gridExtra)
 library(kableExtra)
 library(dplyr)
 library(ggtext)
-library(grid)
-library(gridExtra)
 library(gridtext)
 library(giscoR)
 library(sf)
 library(tidycensus)
 library(scales)
+library(leaflet)
+library(leaflet.extras)
+library(leaflet.providers)
+library(shiny)
+library(lme4)
 
 options(scipen=1)  #999
 
 ```
 
+```{=html}
+<style>
+  .superbigimage{
+      overflow-x:scroll;
+      white-space: nowrap;
+  }
+
+  .superbigimage img{
+     max-width: none;
+  }
 
 
-![Teenage driver taking the on-road exam of getting a driver's license. Image source: Gounaris Abbound.](https://www.gafirm.com/wp-content/uploads/2021/09/teen-driving-laws-ohio-1024x576.jpg)
+</style>
+```
+
+
+```{r plot themes, include=TRUE, cache = FALSE, message = FALSE, warning = FALSE, results=FALSE}
+mapTheme <- function(base_size = 12) {
+  theme(
+    text = element_text( color = "black"),
+    plot.title = element_text(size = 14,colour = "black"),
+    plot.subtitle=element_text(face="italic"),
+    plot.caption=element_text(hjust=0),
+    axis.ticks = element_blank(),
+    panel.background = element_blank(),axis.title = element_blank(),
+    axis.text = element_blank(),
+    axis.title.x = element_blank(),
+    axis.title.y = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.border = element_rect(colour = "grey", fill=NA, size=1)
+  )
+}
+
+
+plotTheme <- function () {
+      font <- "sans" 
+      theme_minimal() %+replace% # replace elements we want to see
+      
+      theme(
+        ## Grid elements
+        panel.grid.major= element_line(colour="#dddddd",size=.1), #element_blank(), #
+        panel.grid.minor = element_blank(),
+        #axis.line = element_line(colour="#D0D0D0",size=.2),
+        #axis.ticks = element_blank(),
+
+        ## Text elements
+        plot.title = element_text(
+          family = font,
+          size = 13,
+          lineheight = 0.75,
+          color = "#222222",
+          face = 'bold',
+          hjust = 0.65,
+          vjust = 0,
+          margin = margin(l=10, t=10, b=20, unit="pt")),
+        
+        #panel.background = element_rect(fill = "#eeeeee"),
+        plot.background = element_blank(),
+        
+        plot.subtitle = element_text(
+          family = font,
+          size = 12,
+          color = "#222222"),
+        
+        plot.caption = element_text(
+          family = font,
+          size = 9,
+          hjust = 1,
+          vjust = -1,
+          margin = margin(6, 0, 6, 0, "pt")),
+        
+        axis.text = element_text(
+          family=font,
+          size = 10),
+
+        
+        axis.title.y = element_text(
+          family = font,
+          color = "#222222",
+          face = 'bold',
+          size = 12,
+          hjust = 1, 
+          #vjust = 1,
+          margin = margin(0, 6, 0, 6, "pt")),
+        
+        axis.title.x = element_text(
+          family = font,
+          color = "#222222",
+          face = 'bold',
+          size = 12,
+          #hjust = 0, 
+          margin = margin(6, 0, 6, 0, "pt")),
+        
+        plot.margin = margin(.25,.25,.25,.25,"cm")
+        )
+      # legend often requires manual tweaking based on plot content so don't define it here
+}
+```
+
+![A teenage driver using smart phone while driving. Image source: edriving.com.](https://www.edriving.com/three60/wp-content/uploads/sites/2/2018/07/GettyImages-503483294-1.jpg)
 
 <br>
 
@@ -49,7 +149,122 @@ In the diverse landscape of Columbus, Ohio, a critical yet often overlooked stor
 
 <br>
 
-Figure 1. Ohio MSA boundary, Ohio boundary, driving centers, and population distribution by Census tract (interactive)
+```{r read data, include=TRUE, cache = FALSE, message = FALSE, warning = FALSE, results=FALSE}
+#import OH shape:
+OH_counties <- get_acs(geography = "county", 
+                       variables = c(total_pop = "B01001_001"),
+                       state = "OH", geometry = TRUE, 
+                       year = 2019, survey = "acs5")  %>% st_transform(., 32617)
+OH_tracts <- get_acs(geography = "tract", 
+                     variables = c(total_pop = "B01001_001"),
+                     state = "OH", geometry = TRUE, 
+                     year = 2019, survey = "acs5")  %>% st_transform(., 32617) %>%
+               dplyr::rename(TotPop = estimate) %>%
+              dplyr::select(-NAME, -starts_with("B0")) %>%
+              mutate(areaSqMi = as.numeric(st_area(.))*0.00000038610215855, #square meter to square mile
+                     popDensity = TotPop/areaSqMi)
+OH_dissolve <- OH_counties %>% dplyr::select(geometry) %>% st_transform(., 32617) %>% st_union() %>% st_sf() #this is how to dissolve
+
+
+#import MSA shape:
+MSA_counties <- get_acs(geography = "county",
+                        variables = c(total_pop = "B01001_001"),
+                        state = "OH",county= c("049",#franklin
+                                               "045",#fairfield
+                                               "041",#delaware
+                                               "159",#union
+                                               "117",#morrow
+                                               "089",#licking
+                                               "129",#pickaway
+                                               "097",#madison
+                                               "127",#perry
+                                               "073"#hocking
+                        ), geometry = TRUE, year = 2019,survey = "acs5") %>%  st_transform(., 32617)
+MSA_dissolve <- MSA_counties %>% dplyr::select(geometry) %>% st_union() %>% st_sf() #this is how to dissolve
+
+
+#adding the points for learning centers:
+centers <- st_read("./../MUSA695_A5_Data/centers_points_merged.shp") # 431 schools
+centers <- centers %>% st_transform(crs=st_crs(OH_dissolve))
+colnames(centers)
+#centers <- centers %>% dplyr::select(addr = Addrsss, geometry)
+centers$index <- 1:nrow(centers)
+
+
+# ggplot() + 
+#   geom_sf(data = OH_dissolve, fill = "white") +
+#   geom_sf(data = MSA_dissolve, fill = "white") +
+#   geom_sf(data = centers, color = "green4") +
+#   labs(caption="Driving training schools, Ohio", size=5)+
+#   mapTheme()
+
+```
+
+
+```{r driving school map, include=TRUE, cache = FALSE, message = FALSE, warning = FALSE}
+#Map total commuting trips by driving onto the base map
+pal <- leaflet::colorNumeric(viridis::viridis_pal(option = "F", direction = -1, 
+                                        begin = 0, end = 1)(5), domain = OH_tracts$popDensity)
+
+OH_tracts %>% st_transform(., 4326)  %>%
+      mutate(label = paste0("<b>", GEOID, ":</b> ", round(popDensity, digits = 2))) %>%
+      filter(!is.na(popDensity)) %>%
+  leaflet(.) %>% 
+  addProviderTiles(providers$CartoDB.Positron) %>% 
+  addPolygons(
+    color = "transparent", weight = 0.1, opacity = 1,
+    fillColor = ~pal(popDensity), fillOpacity = 0.7,
+    label = ~lapply(label, HTML),
+    labelOptions = labelOptions(direction = "top"),
+    highlight = highlightOptions(
+      color = "#FFF", bringToFront = TRUE
+    )
+  ) %>% 
+  addLegend(
+    values = ~popDensity, opacity = 0.7,
+    pal = pal,
+    title = "Population density (/SqMi)", 
+    position = "topright"
+  ) %>%
+  addPolygons(data=OH_counties %>% 
+                st_transform(., 4326) %>%
+                mutate(label = paste0("<b>", NAME, ":</b> ", estimate)),
+    color = "#555555", weight = 0.3, opacity = 1,
+    fillColor = "transparent", fillOpacity = 1,
+    label = ~lapply(label, HTML),
+    labelOptions = labelOptions(direction = "top"),
+    highlight = highlightOptions(
+      color = "#FFF", bringToFront = TRUE
+    )
+  ) %>%
+  addPolygons(data=MSA_counties %>% 
+                st_transform(., 4326)%>%
+                mutate(label = paste0("<b>", NAME, ":</b> ", estimate)),
+    color = "#222222", weight = 0.8, opacity = 1,
+    fillColor = "transparent", fillOpacity = 1,
+    label = ~lapply(label, HTML),
+    labelOptions = labelOptions(direction = "top"),
+    highlight = highlightOptions(
+      color = "#FFF", bringToFront = TRUE
+    )
+  ) %>%
+  addCircleMarkers(data= centers %>% 
+                st_transform(., 4326)%>%
+                mutate(long = st_coordinates(.)[, 1],
+                       lat = st_coordinates(.)[, 2],
+                       label = Drv_S_N),
+              lng = ~long, lat = ~lat,
+              clusterOptions = markerClusterOptions(),
+              fillColor = "#EC7E00", fillOpacity = 1,
+              # fillColor = "transparent", fillOpacity = 1,
+              label = ~lapply(label, HTML),
+              labelOptions = labelOptions(direction = "top"),
+  ) 
+
+
+
+```
+*Map of driving training centers and population density by Census tract in Ohio. Data source: Ohio Department of Public Safety, US Census Bureau 2015-19 5-year ACS. Note: Counties with darker boundaries are in Columbus, Ohio Metropolitan Statistical Area. Driver training schools in Ohio, specifically in the Columbus MSA, are spatially clustered. The study by Ryerson et al. (2022) utilized spatial statistical testing and found that driving training centers are significantly clustered across the MSA. This clustering was observed even when accounting for underlying population density and socioeconomic characteristics such as income level and vehicle ownership. The clustering of training centers tends to be more pronounced in areas of high population density. Interestingly, the clustering of training centers occurs in both areas of high and low income and high and low levels of vehicle ownership.*
 
 <br>
 
@@ -57,17 +272,12 @@ Ohio, like all states in the U.S., has implemented [Graduated Driver Licensing (
 
 <br>
 
-Figure 2. a graph of GDL laws in Ohio
+![*Diagram of Graduated Driver Licensing (GDL) laws in Ohio. In Ohio, if a teenager decides to get a driver's license before 18 years old, he/she needs to follow all time-constrained processes of the GDL system: 6 months for driver education and training (plus costs on driver education) and months/years for restricted driving (not required if turning 18 years old) while waiting for full privileges. Image author: Jasmine Siyu Wu.*](Figures/GDL_OH_2023.jpg)
 
 <br>
 
-A comprehensive study by Dong et al.^[Dong, Xiaoxia, Jasmine Siyu Wu, Shane T. Jensen, Elizabeth A. Walshe, Flaura K. Winston, & Megan S. Ryerson (2023). "Financial status and travel time to driving schools as barriers to obtaining a young driver license in a state with comprehensive young driver licensing policy." Accident Analysis & Prevention 191 (2023): 107198, DOI: 10.1016/j.aap.2023.107198.], encompassing over 35,000 Ohio young drivers from the Columbus Metropolitan Statistical Area (MSA), sheds light on the disparities in access to driver training (DT) and young driver licensure (before 18 years old). This area, home to 2.1 million residents, is heavily auto-dependent, with 80% of workers commuting by car.
+A comprehensive study by Dong et al.^[Dong, Xiaoxia, Jasmine Siyu Wu, Shane T. Jensen, Elizabeth A. Walshe, Flaura K. Winston, & Megan S. Ryerson (2023). "Financial status and travel time to driving schools as barriers to obtaining a young driver license in a state with comprehensive young driver licensing policy." Accident Analysis & Prevention 191 (2023a): 107198, DOI: 10.1016/j.aap.2023.107198.], encompassing over 35,000 Ohio young drivers from the Columbus Metropolitan Statistical Area (MSA), sheds light on the disparities in access to driver training (DT) and young driver licensure (before 18 years old). This area, home to 2.1 million residents, is heavily auto-dependent, with 80% of workers commuting by car.
 
-<br>
-
-Figure 3. an info graphic of Columbus MSA
-
-<br>
 
 The study, which matches licensing data with Census tract-level socioeconomic characteristics, highlights a stark divide: teens in wealthier Census tracts are up to four times as likely to complete DT and gain a young driver's license compared to their peers in lower-income tracts. The probability of completing DT and gaining a license in high-income tracts is over 50%, while it dips below 30% in the lowest-income tracts.
 
@@ -76,9 +286,153 @@ Interestingly, the study reveals that travel time to driving schools significant
 
 <br>
 
-Figure 4. Modeling result line plots
+```{r simulation plot data, include=TRUE, cache = FALSE, message = FALSE, warning = FALSE, results=FALSE}
+load("./../MUSA695_A5_Data//Licensing_ModelData_02252023.RData")
 
+
+#individual-level model with continuous variables####
+
+MSA_dat_dl_ud25[!complete.cases(MSA_dat_dl_ud25 %>% 
+                                  dplyr::select(deel, sex, travel_time, log_income, log_actden, county, fips)),]
+
+ind_mod_cont <- glmer(deel ~ sex + 
+                        travel_time + 
+                        log_income + 
+                        log_actden +
+                        log_income:travel_time +
+                        (1 | county) +
+                        (1 | fips),
+                      data = MSA_dat_dl_ud25,
+                      family = binomial, nAGQ = 0,
+                      control = glmerControl(optimizer = "nloptwrap"))
+summary(ind_mod_cont)
+
+
+ind_dat <- MSA_dat_dl_ud25 %>% 
+  mutate(predicted_con = predict(ind_mod_cont, type = "response"),
+         pred_response_con = ifelse(predicted_con >= 0.5, 'yes', 'no'))
+
+
+table(ind_dat$deel, ind_dat$pred_response_con)
+
+#plot continuous model####
+ind_dat.q1 <- ind_dat %>% filter(income_qu == "Q1") %>%
+  drop_na(income)
+ind_dat.q2 <- ind_dat %>% filter(income_qu == "Q2") %>%
+  drop_na(income)
+ind_dat.q3 <- ind_dat %>% filter(income_qu == "Q3") %>%
+  drop_na(income)
+ind_dat.q4 <- ind_dat %>% filter(income_qu == "Q4") %>%
+  drop_na(income)
+
+
+time_ind_mod_cont <- data.frame(matrix(ncol = 5, nrow = 51))
+colnames(time_ind_mod_cont) <- c("travel_time",
+                                 "dat_q1", "dat_q2",
+                                 "dat_q3", "dat_q4")
+time_ind_mod_cont$travel_time <- seq(0, 25, by = 0.5)
+
+
+for (i in 1:51) {
+  ind_dat.q1$travel_time <- time_ind_mod_cont$travel_time[i]
+  time_ind_mod_cont$dat_q1[i] <- mean(predict(ind_mod_cont, 
+                                              type = "response",
+                                              newdata = ind_dat.q1))
+}
+
+for (i in 1:51) {
+  ind_dat.q2$travel_time <- time_ind_mod_cont$travel_time[i]
+  time_ind_mod_cont$dat_q2[i] <- mean(predict(ind_mod_cont, 
+                                              type = "response",
+                                              newdata = ind_dat.q2))
+}
+
+for (i in 1:51) {
+  ind_dat.q3$travel_time <- time_ind_mod_cont$travel_time[i]
+  time_ind_mod_cont$dat_q3[i] <- mean(predict(ind_mod_cont, 
+                                              type = "response",
+                                              newdata = ind_dat.q3))
+}
+
+for (i in 1:51) {
+  ind_dat.q4$travel_time <- time_ind_mod_cont$travel_time[i]
+  time_ind_mod_cont$dat_q4[i] <- mean(predict(ind_mod_cont, 
+                                              type = "response",
+                                              newdata = ind_dat.q4))
+}
+
+
+time_ind_mod_cont.long <- stack(time_ind_mod_cont, 
+                                select = c(dat_q1, dat_q2, 
+                                           dat_q3, dat_q4))
+time_ind_mod_cont.long$travel_time <- rep(seq(0, 25, by = 0.5), 4)
+
+time_ind_mod_cont.long <- time_ind_mod_cont.long %>% 
+  mutate(income = case_when(time_ind_mod_cont.long$ind == "dat_q1" ~ "Q1",
+                            time_ind_mod_cont.long$ind == "dat_q2" ~ "Q2",
+                            time_ind_mod_cont.long$ind == "dat_q3" ~ "Q3",
+                            time_ind_mod_cont.long$ind == "dat_q4" ~ "Q4"))
+time_ind_mod_cont.long$income <- factor(time_ind_mod_cont.long$income, 
+                                        levels = c("Q1", 
+                                                   "Q2", 
+                                                   "Q3", 
+                                                   "Q4"))
+```
+
+```{r simulation plot, include=TRUE, cache = FALSE, message = FALSE, warning = FALSE, fig.width=9, fig.height=6, fig.align='center'}
+text_grob <- grobTree(richtext_grob("<span style='color:#FE6822;'>Travel time is a bigger disincentive for driver<br>training completing and young driver license for<br>teens in higher-income neighborhoods.</span>",
+                      x=.47,  y=.17, hjust=0, 
+                      gp=gpar(col = "#222222", fontsize=11),
+                      #box_gp = gpar(col = "white", fill = "white"),
+                      padding = margin(.2,0,0,0,"in"))
+                      ) 
+
+
+ggplot(data = time_ind_mod_cont.long, 
+       aes(x = travel_time, y = values, group = income)) +
+  geom_line(aes(linetype = income), linewidth=0.5) +
+  scale_linetype_manual(name = "Household Income (Quartile)",
+                        values = c("dotted", "twodash", 
+                                   "longdash", "solid"),
+                        labels = c("Low", "Moderate", "High", "Very High")) +
+  # geom_hline(yintercept = 0.5, linetype = "longdash", color="#EC7E00", linewidth=1) + 
+  geom_rect(data = time_ind_mod_cont.long[1, ], aes(xmin = 0, xmax = 1, ymin = 0.15, ymax = 0.9), 
+            linetype = "longdash",linewidth=1, color = "#EC7E00", 
+            fill="#EC7E00", alpha = 0.4) +
+  geom_rect(data = time_ind_mod_cont.long[1, ], aes(xmin = 24, xmax = 25, ymin = 0.2, ymax = 0.5), 
+            linetype = "longdash",linewidth=1, color = "#EC7E00", 
+            fill="#EC7E00", alpha = 0.4) +
+  geom_text(aes(y = values), hjust = -0.1, vjust = -0.2, 
+            color = "#000000", parse = T, 
+            label = "bold(VeryHighIncome)", 
+            data = time_ind_mod_cont.long %>% filter(income == "Q4") %>% slice(3)) +
+  geom_text(aes(y = values), hjust = -0.1, vjust = -0.2, 
+            color = "#000000", parse = T, 
+            label = "bold(HighIncome)", 
+            data = time_ind_mod_cont.long %>% filter(income == "Q3") %>% slice(3)) +
+  geom_text(aes(y = values), hjust = -0.1, vjust = -0.2, 
+            color = "#000000", parse = T, 
+            label = "bold(MedianIncome)", 
+            data = time_ind_mod_cont.long %>% filter(income == "Q2") %>% slice(3)) +
+  geom_text(aes(y = values), hjust = -0.1, vjust = -0.4, 
+            color = "#000000", parse = T, 
+            label = "bold(LowIncome)", 
+            data = time_ind_mod_cont.long %>% filter(income == "Q1") %>% slice(3)) +
+  labs(x = "Travel time (minutes)",
+       y = "Average probability",
+       caption = "Data source: Ohio Bureau of Motor Vehicles, U.S. Census Bureau ACS, Google Maps API | Jasmine Siyu Wu"
+       ) +
+  coord_cartesian(ylim = c(0, 1)) +
+  plotTheme() +
+  theme(legend.position = "none") +
+  annotation_custom(
+      grob = text_grob, 
+      xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf)
+
+```
+*Simulation plot of individual probability of a teen completing driver training and getting a driver's license before 18 in Columbus MSA. Dong et al. (2023a) find that teens in higher-income neighborhoods have higher probabilities of completing driver training and obtaining young driver licenses. Travel time is a bigger disincentive for driver training completing and young driver license for teens in higher-income neighborhoods.*
 <br>
+
 
 Amidst the bustling streets and quiet suburbs of Columbus, Ohio, MSA, the disparity in driver education access casts a long shadow over the aspirations of its youth - raising critical implications of driver licensure for access to employment, education, and other opportunities. While observed across socioeconomic groups, this disparity presents geospatial patterns. In some areas, driving schools dot the landscape, offering easy access to teens eager to learn. Yet, in others, particularly those marked by economic hardship, such schools are a rarity, creating what researchers have termed "Driver Training Deserts" (DTDs)^[Ryerson, Megan, Joshua Davidson, Jasmine Siyu Wu, Ilil Feiglin & Flaura Winston (2022). “Identifying community-level disparities in access to driver education and training: Toward a definition of driver training deserts.” Traffic Injury Prevention, 23:sup1, S14-S19, DOI: 10.1080/15389588.2022.2125305.].
 
@@ -86,13 +440,7 @@ Amidst the bustling streets and quiet suburbs of Columbus, Ohio, MSA, the dispar
 
 - *Lucas*, living in a suburb flush with driver education options, represents the other side of this divide. For him, driver training is a convenient and assumed part of teenage life.
 
-A consequent study by Dong et al.^[Dong, Xiaoxia, Jasmine Siyu Wu, Elizabeth A. Walshe, Flaura K. Winston, and Megan S. Ryerson (2023). “Residing in a Driver Training Desert Leads to Delayed Licensure: Investigating the Relationship between Accessibility to Driver Training and Young Driver’s Licensure.” Findings, August. DOI: 10.32866/001c.85096.] highlights the stark reality: teens like Jasmine in DTDs have a 25% lower likelihood of receiving driver training and securing a license before 18 compared to their peers like Lucas. 
-
-<br>
-
-Figure 5. Cumulative distribution plot of licensure rate by DTDs and non-DTDs 
-
-<br>
+A consequent study by Dong et al.^[Dong, Xiaoxia, Jasmine Siyu Wu, Elizabeth A. Walshe, Flaura K. Winston, and Megan S. Ryerson (2023b). “Residing in a Driver Training Desert Leads to Delayed Licensure: Investigating the Relationship between Accessibility to Driver Training and Young Driver’s Licensure.” Findings, August. DOI: 10.32866/001c.85096.] highlights the stark reality: teens like Jasmine in DTDs have a 25% lower likelihood of receiving driver training and securing a license before 18 compared to their peers like Lucas. 
 
 The impact of these disparities goes beyond mere inconvenience. Transportation safety is tied to driver education and training, with data showing lower crash rates among those who receive early licensure following formal training^[Elizabeth A. Walshe, Daniel Romer, Abraham J. Wyner, Shukai Cheng, Michael R. Elliott, Robert Zhang, Alexander K. Gonzalez, Natalie Oppenheimer, and Flaura K. Winston. "Licensing examination and crash outcomes postlicensure in young drivers." JAMA network open 5, no. 4 (2022): e228780-e228780.]. For teens living in DTDs, the lack of access is not just about mobility; it is a safety risk and a hindrance to equal opportunities in education and employment. 
 
@@ -100,7 +448,7 @@ Spatial analysis using Moran's I tests reveals a clear geographic pattern to thi
 
 <br>
 
-Figure 6. Map of DTDs' and non-DTDs' licensure rates.
+![*Map of predicted average share of <25 who have completed driver training secured young licensure by Census tract in Columbus, OH MSA. Dong et al. (2023b) using Moran’s I tests find that there is significant spatial clustering of average probabilities of driver training and licensure by Census tract. Census tracts with higher average probabilities are located in the more suburban locations outside of the City of Columbus, such as Delaware, Pickaway, and Union Counties. CTs with lower average probabilities are concentrated in or immediately outside of the City of Columbus. Image author: Jasmine Siyu Wu.*](Figures/TractDEELRatioMap_IndivCont_1128.jpg)
 
 <br>
 
